@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 
-from config import settings
+from conf.config import settings
 
 
 class Token(BaseModel):

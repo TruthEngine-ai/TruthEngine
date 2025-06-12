@@ -4,8 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from config import settings
-from models.response import ApiResponse
+from conf.config import settings
+from model.dto.response import ApiResponse
 from utils.auth_util import (
     UserCreate, verify_password, create_access_token,
     get_password_hash, oauth2_scheme, decode_token

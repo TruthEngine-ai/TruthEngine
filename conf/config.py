@@ -11,7 +11,9 @@ def load_env_file(env_path: str = ".env"):
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    os.environ.setdefault(key.strip(), value.strip())
+                    # print(f"设置环境变量 - key: {key.strip()}, value: {value.strip()}")
+                    # 使用直接赋值而不是 setdefault，确保 .env 文件中的值优先
+                    os.environ[key.strip()] = value.strip()
 
 
 class Settings:
@@ -40,6 +42,13 @@ class Settings:
         # 应用配置
         self.APP_NAME: str = os.getenv("APP_NAME", "TruthEngine")
         self.APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
+        
+        # AI模型配置
+        self.API_URL: str = os.getenv("API_URL", "https://api.openai.com/v1/chat/completions")
+        self.API_KEY: str = os.getenv("API_KEY", "")
+        self.API_MODEL: str = os.getenv("API_MODEL", "gpt-3.5-turbo")
+        self.API_TEMPERATURE: float = float(os.getenv("API_TEMPERATURE", "1.0"))
+        
 
     def is_development(self) -> bool:
         """检查是否为开发环境"""

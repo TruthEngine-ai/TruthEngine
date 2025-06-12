@@ -40,7 +40,8 @@ ENV/
 *.log
 
 # 配置文件排除
-config/sql_init.py
+conf/sql_init.py
+# conf/config.py
 
 # 数据库文件
 *.db
