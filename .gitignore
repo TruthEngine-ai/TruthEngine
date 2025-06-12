@@ -23,6 +23,8 @@ wheels/
 .installed.cfg
 *.egg
 
+
+
 # 虚拟环境
 venv/
 env/
@@ -36,6 +38,9 @@ ENV/
 
 # 日志文件
 *.log
+
+# 配置文件排除
+config/sql_init.py
 
 # 数据库文件
 *.db

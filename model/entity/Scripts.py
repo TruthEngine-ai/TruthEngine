@@ -1,21 +1,30 @@
 from tortoise.models import Model
 from tortoise import fields
 
-class Users(Model):
+
+class BaseModel(Model):
+    """基础模型，包含公共字段"""
     id = fields.IntField(primary_key=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+
+class Users(BaseModel):
     username = fields.CharField(max_length=50, unique=True)
     password_hash = fields.CharField(max_length=255)
     nickname = fields.CharField(max_length=50)
     avatar_url = fields.CharField(max_length=255, null=True)
     email = fields.CharField(max_length=100, unique=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
     last_login_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "users"
 
-class Scripts(Model):
-    id = fields.IntField(primary_key=True)
+class Scripts(BaseModel):
     title = fields.CharField(max_length=100)
     cover_image_url = fields.CharField(max_length=255, null=True)
     description = fields.TextField()
@@ -33,13 +42,11 @@ class Scripts(Model):
         choices=[('草稿', '草稿'), ('发布', '发布'), ('下架', '下架')],
         default='草稿'
     )
-    created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "scripts"
 
-class ScriptCharacters(Model):
-    id = fields.IntField(primary_key=True)
+class ScriptCharacters(BaseModel):
     script = fields.ForeignKeyField('models.Scripts', related_name='characters')
     name = fields.CharField(max_length=50)
     gender = fields.CharField(
@@ -54,8 +61,7 @@ class ScriptCharacters(Model):
     class Meta:
         table = "script_characters"
 
-class ScriptClues(Model):
-    id = fields.IntField(primary_key=True)
+class ScriptClues(BaseModel):
     script = fields.ForeignKeyField('models.Scripts', related_name='clues')
     name = fields.CharField(max_length=100)
     description = fields.TextField()
@@ -67,8 +73,7 @@ class ScriptClues(Model):
     class Meta:
         table = "script_clues"
 
-class GameRooms(Model):
-    id = fields.IntField(primary_key=True)
+class GameRooms(BaseModel):
     room_code = fields.CharField(max_length=10, unique=True)
     script = fields.ForeignKeyField('models.Scripts', related_name='game_rooms')
     host_user = fields.ForeignKeyField('models.Users', related_name='hosted_rooms')
@@ -84,15 +89,13 @@ class GameRooms(Model):
         choices=[('严肃', '严肃'), ('幽默', '幽默'), ('神秘', '神秘')],
         default='严肃'
     )
-    created_at = fields.DatetimeField(auto_now_add=True)
     started_at = fields.DatetimeField(null=True)
     finished_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "game_rooms"
 
-class GamePlayers(Model):
-    id = fields.IntField(primary_key=True)
+class GamePlayers(BaseModel):
     room = fields.ForeignKeyField('models.GameRooms', related_name='players')
     user = fields.ForeignKeyField('models.Users', related_name='game_sessions')
     character = fields.ForeignKeyField('models.ScriptCharacters', related_name='game_players')
@@ -104,7 +107,7 @@ class GamePlayers(Model):
         table = "game_players"
         unique_together = [('room', 'user'), ('room', 'character')]
 
-class GameLogs(Model):
+class GameLogs(BaseModel):
     id = fields.BigIntField(primary_key=True)
     room = fields.ForeignKeyField('models.GameRooms', related_name='logs')
     sender_game_player = fields.ForeignKeyField('models.GamePlayers', related_name='sent_messages', null=True)
@@ -122,8 +125,7 @@ class GameLogs(Model):
     class Meta:
         table = "game_logs"
 
-class GameVotes(Model):
-    id = fields.IntField(primary_key=True)
+class GameVotes(BaseModel):
     room = fields.ForeignKeyField('models.GameRooms', related_name='votes')
     round = fields.IntField()
     voter_game_player = fields.ForeignKeyField('models.GamePlayers', related_name='votes_cast')
