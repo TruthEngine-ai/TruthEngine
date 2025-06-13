@@ -10,7 +10,7 @@ from utils.auth_util import (
     UserCreate, verify_password, create_access_token,
     get_password_hash, oauth2_scheme, decode_token
 )
-from models.database import User as UserModel
+from model.entity.Scripts import Users as UserModel
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -24,7 +24,7 @@ async def authenticate_user(username: str, password: str):
     user = await get_user(username)
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.password_hash):
         return False
     return user
 
@@ -42,8 +42,8 @@ async def create_user(user_data: UserCreate):
     user = await UserModel.create(
         username=user_data.username,
         email=user_data.email,
-        full_name=user_data.full_name,
-        hashed_password=hashed_password,
+        nickname=user_data.nickname,
+        password_hash=hashed_password,
     )
     return user
 
@@ -83,7 +83,7 @@ async def login_for_access_token(
     )
 
     # 更新最后登录时间
-    await UserModel.filter(id=user.id).update(last_login=user.created_at.__class__.now())
+    await UserModel.filter(id=user.id).update(last_login_at=user.created_at.__class__.now())
 
     return {
         "access_token": access_token,
@@ -101,7 +101,7 @@ async def register_user(user_data: UserCreate):
             data={
                 "username": user.username,
                 "email": user.email,
-                "full_name": user.full_name,
+                "nickname": user.nickname,
                 "disabled": not user.is_active
             }
         )
@@ -123,7 +123,7 @@ async def read_users_me(
         data={
             "username": current_user.username,
             "email": current_user.email,
-            "full_name": current_user.full_name,
+            "nickname": current_user.nickname,
             "disabled": not current_user.is_active
         }
     )

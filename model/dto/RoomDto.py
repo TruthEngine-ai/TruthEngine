@@ -7,7 +7,6 @@ from .response import ApiResponse
 class CreateRoomData(BaseModel):
     room_code: str
     host_id: int
-    is_guest: bool
 
 class CreateRoomResponse(ApiResponse[CreateRoomData]):
     pass
@@ -15,7 +14,6 @@ class CreateRoomResponse(ApiResponse[CreateRoomData]):
 class JoinRoomData(BaseModel):
     room_code: str
     user_id: int
-    is_guest: bool
 
 class JoinRoomResponse(ApiResponse[JoinRoomData]):
     pass
@@ -51,10 +49,10 @@ class PlayerInfo(BaseModel):
 class RoomDetailData(BaseModel):
     room_code: str
     status: str
-    current_round: int
+    current_round: Optional[int] = None
     ai_dm_personality: str
     has_password: bool
-    script: ScriptInfo
+    script: Optional[ScriptInfo] = None
     host: HostInfo
     players: List[PlayerInfo]
     created_at: datetime

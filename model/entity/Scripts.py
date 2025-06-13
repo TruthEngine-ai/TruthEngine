@@ -19,6 +19,7 @@ class Users(BaseModel):
     nickname = fields.CharField(max_length=50)
     avatar_url = fields.CharField(max_length=255, null=True)
     email = fields.CharField(max_length=100, unique=True)
+    is_active = fields.BooleanField(default=True)
     last_login_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -122,7 +123,7 @@ class GameRooms(BaseModel):
 class GamePlayers(BaseModel):
     room = fields.ForeignKeyField('models.GameRooms', related_name='players')
     user = fields.ForeignKeyField('models.Users', related_name='game_sessions')
-    character = fields.ForeignKeyField('models.ScriptCharacters', related_name='game_players')
+    character = fields.ForeignKeyField('models.ScriptCharacters', related_name='game_players', null=True)
     is_ready = fields.BooleanField(default=False)
     is_alive = fields.BooleanField(default=True)
     notes = fields.TextField(default="")

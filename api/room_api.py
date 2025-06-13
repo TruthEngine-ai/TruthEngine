@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
+
+from typing import Annotated
+
 import random
 import string
 from datetime import datetime, timedelta
@@ -14,20 +17,19 @@ from model.dto.RoomDto import (
     CreateRoomResponse, JoinRoomResponse, LeaveRoomResponse,
     RoomListResponse, RoomDetailResponse, DeleteRoomResponse, CleanupRoomResponse
 )
+from .auth_api import get_current_user
+from models.database import User as UserModel
 
 router = APIRouter(prefix="/api/room", tags=["房间管理"])
 
 # 请求模型
 class CreateRoomRequest(BaseModel):
-    script_id: int
     room_password: Optional[str] = ""
-    ai_dm_personality: str = "严肃"
-    user_id: Optional[int] = None  # None表示游客
+    ai_dm_personality: Optional[str] = "严肃"
 
 class JoinRoomRequest(BaseModel):
     room_code: str
     room_password: Optional[str] = ""
-    user_id: Optional[int] = None
 
 class RoomResponse(BaseModel):
     room_code: str
@@ -58,23 +60,10 @@ async def get_or_create_guest_user() -> Users:
         return await get_or_create_guest_user()
 
 @router.post("/create", response_model=CreateRoomResponse)
-async def create_room(request: CreateRoomRequest):
+async def create_room(request: CreateRoomRequest, current_user: Annotated[UserModel, Depends(get_current_user)] ):
     """创建房间"""
     try:
         # # 验证剧本是否存在
-        # script = await Scripts.get(id=request.script_id)
-        
-        # 处理用户身份
-        if request.user_id:
-            try:
-                host_user = await Users.get(id=request.user_id)
-            except DoesNotExist:
-                raise HTTPException(status_code=404, detail="用户不存在")
-            
-        else:
-            # 游客身份，创建临时用户
-            host_user = await get_or_create_guest_user()
-        
         # 生成唯一房间码
         while True:
             room_code = generate_room_code()
@@ -86,9 +75,15 @@ async def create_room(request: CreateRoomRequest):
         room = await GameRooms.create(
             room_code=room_code,
             room_password=request.room_password or "",
-            # script=script,
-            host_user=host_user,
+            host_user=current_user,
             ai_dm_personality=request.ai_dm_personality
+        )
+        
+        # 房主自动加入房间
+        await GamePlayers.create(
+            room=room,
+            user=current_user,
+            character=None  # 角色选择阶段再分配
         )
         
         return ApiResponse(
@@ -96,8 +91,7 @@ async def create_room(request: CreateRoomRequest):
             msg="房间创建成功",
             data={
                 "room_code": room_code,
-                "host_id": host_user.id,
-                "is_guest": request.user_id is None
+                "host_id": current_user.id
             }
         )
         
@@ -107,7 +101,7 @@ async def create_room(request: CreateRoomRequest):
         raise HTTPException(status_code=500, detail=f"创建房间失败: {str(e)}")
 
 @router.post("/join", response_model=JoinRoomResponse)
-async def join_room(request: JoinRoomRequest):
+async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel, Depends(get_current_user)] ):
     """用户加入游戏房间"""
     try:
         # 查找房间
@@ -121,18 +115,9 @@ async def join_room(request: JoinRoomRequest):
         if room.room_password and room.room_password != request.room_password:
             raise HTTPException(status_code=400, detail="房间密码错误")
         
-        # 处理用户身份
-        if request.user_id:
-            try:
-                user = await Users.get(id=request.user_id)
-            except DoesNotExist:
-                raise HTTPException(status_code=404, detail="用户不存在")
-        else:
-            # 游客身份
-            user = await get_or_create_guest_user()
-        
+
         # 检查用户是否已在房间中
-        existing_player = await GamePlayers.filter(room=room, user=user).first()
+        existing_player = await GamePlayers.filter(room=room, user=current_user).first()
         if existing_player:
             raise HTTPException(status_code=400, detail="用户已在房间中")
         
@@ -144,7 +129,7 @@ async def join_room(request: JoinRoomRequest):
         # 加入房间（暂不分配角色）
         await GamePlayers.create(
             room=room,
-            user=user,
+            user=current_user,
             character=None  # 角色选择阶段再分配
         )
         
@@ -153,8 +138,7 @@ async def join_room(request: JoinRoomRequest):
             msg="加入房间成功",
             data={
                 "room_code": room.room_code,
-                "user_id": user.id,
-                "is_guest": request.user_id is None
+                "user_id": current_user.id
             }
         )
         
@@ -166,14 +150,13 @@ async def join_room(request: JoinRoomRequest):
         raise HTTPException(status_code=500, detail=f"加入房间失败: {str(e)}")
 
 @router.post("/leave", response_model=LeaveRoomResponse)
-async def leave_room(room_code: str, user_id: int):
+async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(get_current_user)]):
     """退出房间"""
     try:
         room = await GameRooms.get(room_code=room_code)
-        user = await Users.get(id=user_id)
         
         # 查找玩家记录
-        player = await GamePlayers.filter(room=room, user=user).first()
+        player = await GamePlayers.filter(room=room, user=current_user).first()
         if not player:
             raise HTTPException(status_code=404, detail="用户不在此房间中")
         
@@ -181,7 +164,7 @@ async def leave_room(room_code: str, user_id: int):
         await player.delete()
         
         # 如果是房主离开且房间还有其他玩家，转移房主
-        if room.host_user_id == user_id:
+        if room.host_user_id == current_user.id:
             remaining_players = await GamePlayers.filter(room=room).prefetch_related('user')
             if remaining_players:
                 # 转移给第一个剩余玩家
@@ -225,10 +208,14 @@ async def get_room_list(page: int = 1, page_size: int = 20, status: Optional[str
         
         room_list = []
         for room in rooms:
+            # 添加空值检查
+            if not room.script or not room.host_user:
+                continue  # 跳过数据不完整的房间
+            
             player_count = len(room.players) if hasattr(room, 'players') else 0
             room_list.append({
                 "room_code": room.room_code,
-                "script_title": room.script.title,
+                "script_title": "" if not room.script else room.script.title,
                 "host_nickname": room.host_user.nickname,
                 "player_count": player_count,
                 "max_players": room.script.player_count_max,
@@ -252,13 +239,13 @@ async def get_room_list(page: int = 1, page_size: int = 20, status: Optional[str
         raise HTTPException(status_code=500, detail=f"获取房间列表失败: {str(e)}")
 
 @router.delete("/delete/{room_code}", response_model=DeleteRoomResponse)
-async def delete_room(room_code: str, user_id: int):
+async def delete_room(room_code: str,current_user: Annotated[UserModel, Depends(get_current_user)]):
     """删除房间"""
     try:
         room = await GameRooms.get(room_code=room_code)
         
         # 验证是否为房主
-        if room.host_user_id != user_id:
+        if room.host_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="只有房主可以删除房间")
         
         # 删除相关的玩家记录
@@ -306,10 +293,10 @@ async def get_room_info(room_code: str):
             data={
                 "room_code": room.room_code,
                 "status": room.status,
-                "current_round": room.current_round,
+                "current_round": room.current_stage.name if room.current_stage else None,
                 "ai_dm_personality": room.ai_dm_personality,
                 "has_password": bool(room.room_password),
-                "script": {
+                "script": None if not room.script else {
                     "id": room.script.id,
                     "title": room.script.title,
                     "description": room.script.description,

@@ -22,7 +22,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
 # 注册数据库
 register_db(app)
 

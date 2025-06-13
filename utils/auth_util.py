@@ -29,7 +29,7 @@ class User(BaseModel):
 class UserCreate(BaseModel):
     username: str
     email: str
-    full_name: str | None = None
+    nickname: str | None = None
     password: str
 
 
