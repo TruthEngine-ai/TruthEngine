@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Annotated
+import random
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -44,6 +45,30 @@ async def create_user(user_data: UserCreate):
         email=user_data.email,
         nickname=user_data.nickname,
         password_hash=hashed_password,
+    )
+    return user
+
+
+async def create_guest_user(nickname: str):
+    """创建游客用户"""
+    # 生成唯一的游客用户名和邮箱
+    while True:
+        guest_id = random.randint(100000, 999999)
+        username = f"guest_{guest_id}"
+        email = f"guest_{guest_id}@temp.com"
+        
+        # 检查用户名是否已存在
+        existing_user = await UserModel.filter(username=username).first()
+        if not existing_user:
+            break
+    
+    # 创建游客用户（无密码）
+    user = await UserModel.create(
+        username=username,
+        email=email,
+        nickname=nickname,
+        password_hash="",  # 游客无密码
+        is_visitor=True
     )
     return user
 
@@ -109,6 +134,44 @@ async def register_user(user_data: UserCreate):
         return ApiResponse(
             code=e.status_code,
             msg=e.detail,
+            data=None
+        )
+
+
+@router.post("/guest-register")
+async def register_guest_user(nickname: str):
+    """游客快速注册"""
+    try:
+        # 创建游客用户
+        user = await create_guest_user(nickname)
+        
+        # 生成访问令牌
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.username}, expires_delta=access_token_expires
+        )
+        
+        # 更新最后登录时间
+        await UserModel.filter(id=user.id).update(last_login_at=user.created_at.__class__.now())
+        
+        return ApiResponse(
+            code=200,
+            msg="游客注册成功",
+            data={
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_info": {
+                    "id": user.id,
+                    "username": user.username,
+                    "nickname": user.nickname,
+                    "is_visitor": user.is_visitor
+                }
+            }
+        )
+    except Exception as e:
+        return ApiResponse(
+            code=500,
+            msg=f"游客注册失败: {str(e)}",
             data=None
         )
 

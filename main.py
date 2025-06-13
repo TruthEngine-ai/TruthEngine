@@ -4,7 +4,8 @@ from conf.database import register_db
 from api.room_api import router as room_router
 from api.auth_api import router as auth_router
 from api.scripts_api import router as scripts_router
-
+from websocket.websocket_routes import router as websocket_router
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,6 +30,19 @@ register_db(app)
 app.include_router(auth_router)
 app.include_router(room_router)
 app.include_router(scripts_router)
+# 添加WebSocket路由
+app.include_router(websocket_router)
+
+origins = [
+    "*"
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():

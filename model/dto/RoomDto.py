@@ -66,7 +66,7 @@ class RoomListItem(BaseModel):
     script_title: str
     host_nickname: str
     player_count: int
-    max_players: int
+    max_players: Optional[int]
     status: str
     has_password: bool
     created_at: datetime

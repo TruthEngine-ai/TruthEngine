@@ -1,24 +1,29 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Annotated
 import json
 import httpx
+import asyncio
+import logging
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from model.entity.Scripts import (
     Scripts, ScriptStages, ScriptCharacters, 
-    CharacterStageGoals, ScriptClues, Users
+    CharacterStageGoals, ScriptClues, Users, GameRooms
 )
 from model.dto.response import ApiResponse
 from model.dto.ScriptsDto import CreateScriptRequest, GenerateScriptResponse
 from conf.config import settings
+from .auth_api import get_current_user
+from models.database import User as UserModel
 
 router = APIRouter(prefix="/api/scripts", tags=["剧本管理"])
 
 
-async def call_ai_api(prompt: str) -> str:
-    """调用 AI 接口生成剧本内容"""
+
+async def call_ai_api(prompt: str, max_retries: int = 1) -> str:
+    """调用 AI 接口生成剧本内容，带重试机制"""
     if not settings.API_URL or not settings.API_KEY:
         raise HTTPException(status_code=500, detail="AI 配置未设置")
     
@@ -27,7 +32,6 @@ async def call_ai_api(prompt: str) -> str:
         "Content-Type": "application/json"
     }
     
-    
     payload = {
         "model": settings.API_MODEL,
         "messages": [
@@ -35,20 +39,67 @@ async def call_ai_api(prompt: str) -> str:
             {"role": "user", "content": prompt}
         ],
         "temperature": settings.API_TEMPERATURE,
-        "max_tokens": 32000
+        "max_tokens": 4096
     }
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    # 优化超时设置
+    timeout = httpx.Timeout(
+        connect=60.0,    # 连接超时（1分钟）
+        read=900.0,      # 读取超时（15分钟）
+        write=60.0,      # 写入超时
+        pool=60.0        # 连接池超时
+    )
+    
+    last_error = None
+    
+    for attempt in range(max_retries):
         try:
-            response = await client.post(settings.API_URL, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=500, detail=f"AI 接口调用失败: {str(e)}")
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                logging.info(f"AI API 调用尝试 {attempt + 1}/{max_retries}")
+                
+                response = await client.post(settings.API_URL, json=payload, headers=headers)
+                response.raise_for_status()
+                
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                logging.info(f"AI API 调用成功，返回内容长度: {len(content)}")
+                return content
+                
+        except httpx.ConnectTimeout:
+            last_error = "连接超时"
+            logging.warning(f"第 {attempt + 1} 次尝试连接超时")
+        except httpx.ReadTimeout:
+            last_error = "读取超时"
+            logging.warning(f"第 {attempt + 1} 次尝试读取超时")
+        except httpx.RemoteProtocolError as e:
+            last_error = f"协议错误: {str(e)}"
+            logging.warning(f"第 {attempt + 1} 次尝试协议错误: {str(e)}")
+        except httpx.NetworkError as e:
+            last_error = f"网络错误: {str(e)}"
+            logging.warning(f"第 {attempt + 1} 次尝试网络错误: {str(e)}")
+        except httpx.HTTPStatusError as e:
+            last_error = f"HTTP 状态错误: {e.response.status_code}"
+            logging.error(f"HTTP 错误 {e.response.status_code}: {e.response.text}")
+            # 对于 4xx 错误，不重试
+            if 400 <= e.response.status_code < 500:
+                raise HTTPException(status_code=500, detail=f"AI 接口调用失败: {last_error}")
         except KeyError as e:
+            last_error = f"响应格式错误: {str(e)}"
+            logging.error(f"AI 响应格式错误: {str(e)}")
             raise HTTPException(status_code=500, detail=f"AI 响应格式错误: {str(e)}")
+        except Exception as e:
+            last_error = f"未知错误: {str(e)}"
+            logging.error(f"第 {attempt + 1} 次尝试未知错误: {str(e)}")
+        
+        # 如果不是最后一次尝试，等待后重试
+        if attempt < max_retries - 1:
+            wait_time = (attempt + 1) * 5  # 递增等待时间：5秒、10秒、15秒
+            logging.info(f"等待 {wait_time} 秒后重试...")
+            await asyncio.sleep(wait_time)
+    
+    # 所有重试都失败了
+    raise HTTPException(status_code=500, detail=f"AI 接口调用失败，已重试 {max_retries} 次。最后错误: {last_error}")
 
 def get_system_prompt() -> str:
     """获取系统提示词"""
@@ -221,10 +272,15 @@ async def parse_and_save_script(ai_response: str, author_id: int, play_count:int
     except IntegrityError as e:
         raise HTTPException(status_code=500, detail=f"数据库保存失败: {str(e)}")
 
-@router.post("/generate", response_model=GenerateScriptResponse)
-async def generate_script(request: CreateScriptRequest):
+@router.post("/generate", response_model=ApiResponse)
+async def generate_script(request: CreateScriptRequest, current_user: Annotated[UserModel, Depends(get_current_user)]):
     """生成剧本"""
     try:
+        # 验证房间存在且用户为房主
+        room = await GameRooms.get(room_code=request.room_code)
+        if room.host_user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只有房主可以生成剧本")
+        
         # 创建用户提示词
         user_prompt = create_user_prompt(
             request.theme,
@@ -239,24 +295,42 @@ async def generate_script(request: CreateScriptRequest):
         
         print(f"AI Response: {ai_response}")
         # 解析并保存到数据库
-        script_id = await parse_and_save_script(ai_response, request.author_id,request.player_count, request.duration_mins)
+        script_id = await parse_and_save_script(ai_response, current_user.id, request.player_count, request.duration_mins)
         
-        # 获取生成的剧本信息
-        script = await Scripts.get(id=script_id)
+        # 将剧本关联到房间
+        room = await GameRooms.get(room_code=request.room_code)
+        room.script_id = script_id
+        await room.save()
+        
+        # 获取生成的剧本信息和角色信息
+        script = await Scripts.get(id=script_id).prefetch_related('characters')
+        
+        # 构建角色信息列表
+        characters = []
+        for character in script.characters:
+            characters.append({
+                "id": character.id,
+                "name": character.name,
+                "gender": character.gender,
+                "public_info": character.public_info
+            })
         
         return ApiResponse(
             code=200,
             msg="剧本生成成功",
             data={
                 "script_id": script.id,
-                "script_info": ai_response
+                "characters": characters
             }
         )
         
     except HTTPException:
-        raise
+        raise   
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"生成剧本失败: {str(e)}")
+
+
+
 
 
 

@@ -1,0 +1,94 @@
+from typing import Dict, List, Optional
+from fastapi import WebSocket
+import json
+import asyncio
+from datetime import datetime
+
+class ConnectionManager:
+    def __init__(self):
+        # 房间连接映射 {room_code: {user_id: websocket}}
+        self.room_connections: Dict[str, Dict[int, WebSocket]] = {}
+        # 用户房间映射 {user_id: room_code}
+        self.user_rooms: Dict[int, str] = {}
+
+    async def connect(self, websocket: WebSocket, room_code: str, user_id: int):
+        """用户连接到房间"""
+        await websocket.accept()
+        
+        if room_code not in self.room_connections:
+            self.room_connections[room_code] = {}
+        
+        self.room_connections[room_code][user_id] = websocket
+        self.user_rooms[user_id] = room_code
+        
+        # 通知房间内其他用户有新用户加入
+        await self.broadcast_to_room(room_code, {
+            "type": "user_joined",
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }, exclude_user=user_id)
+
+    async def disconnect(self, user_id: int):
+        """用户断开连接"""
+        if user_id in self.user_rooms:
+            room_code = self.user_rooms[user_id]
+            
+            if room_code in self.room_connections and user_id in self.room_connections[room_code]:
+                del self.room_connections[room_code][user_id]
+                
+                # 如果房间没有连接了，删除房间
+                if not self.room_connections[room_code]:
+                    del self.room_connections[room_code]
+                else:
+                    # 通知房间内其他用户有用户离开
+                    await self.broadcast_to_room(room_code, {
+                        "type": "user_left",
+                        "user_id": user_id,
+                        "timestamp": datetime.now().isoformat()
+                    })
+            
+            del self.user_rooms[user_id]
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        """发送个人消息"""
+        if user_id in self.user_rooms:
+            room_code = self.user_rooms[user_id]
+            if room_code in self.room_connections and user_id in self.room_connections[room_code]:
+                websocket = self.room_connections[room_code][user_id]
+                try:
+                    await websocket.send_text(json.dumps(message, ensure_ascii=False))
+                except:
+                    # 连接已断开，清理
+                    await self.disconnect(user_id)
+
+    async def broadcast_to_room(self, room_code: str, message: dict, exclude_user: Optional[int] = None):
+        """向房间内所有用户广播消息"""
+        if room_code in self.room_connections:
+            disconnected_users = []
+            
+            for user_id, websocket in self.room_connections[room_code].items():
+                if exclude_user and user_id == exclude_user:
+                    continue
+                    
+                try:
+                    await websocket.send_text(json.dumps(message, ensure_ascii=False))
+                except:
+                    # 连接已断开，记录待清理的用户
+                    disconnected_users.append(user_id)
+            
+            # 清理断开的连接
+            for user_id in disconnected_users:
+                await self.disconnect(user_id)
+
+    def get_room_users(self, room_code: str) -> List[int]:
+        """获取房间内的用户列表"""
+        if room_code in self.room_connections:
+            return list(self.room_connections[room_code].keys())
+        return []
+
+    def is_user_connected(self, user_id: int) -> bool:
+        """检查用户是否在线"""
+        return user_id in self.user_rooms
+
+# 全局连接管理器实例
+manager = ConnectionManager()

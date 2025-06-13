@@ -9,12 +9,13 @@ class CreateScriptRequest(BaseModel):
     difficulty: str
     ai_dm_personality: str
     author_id: int
+    room_code: str
     duration_mins: int = 90  # 添加游戏时长参数，默认90分钟
 
 class GenerateScript(BaseModel):
     script_id: int
     # title: str
-    script_info: str
+    characters: str
     
 class GenerateScriptResponse(ApiResponse[GenerateScript]):
     pass

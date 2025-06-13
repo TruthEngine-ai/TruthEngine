@@ -19,6 +19,7 @@ from model.dto.RoomDto import (
 )
 from .auth_api import get_current_user
 from models.database import User as UserModel
+from websocket.connection_manager import manager
 
 router = APIRouter(prefix="/api/room", tags=["房间管理"])
 
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/room", tags=["房间管理"])
 class CreateRoomRequest(BaseModel):
     room_password: Optional[str] = ""
     ai_dm_personality: Optional[str] = "严肃"
+    player_count_max : int
 
 class JoinRoomRequest(BaseModel):
     room_code: str
@@ -76,7 +78,8 @@ async def create_room(request: CreateRoomRequest, current_user: Annotated[UserMo
             room_code=room_code,
             room_password=request.room_password or "",
             host_user=current_user,
-            ai_dm_personality=request.ai_dm_personality
+            ai_dm_personality=request.ai_dm_personality,
+            player_count_max=request.player_count_max
         )
         
         # 房主自动加入房间
@@ -115,7 +118,6 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
         if room.room_password and room.room_password != request.room_password:
             raise HTTPException(status_code=400, detail="房间密码错误")
         
-
         # 检查用户是否已在房间中
         existing_player = await GamePlayers.filter(room=room, user=current_user).first()
         if existing_player:
@@ -123,7 +125,7 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
         
         # 检查房间人数限制
         current_players = await GamePlayers.filter(room=room).count()
-        if current_players >= room.script.player_count_max:
+        if current_players >= room.max_players:
             raise HTTPException(status_code=400, detail="房间已满")
         
         # 加入房间（暂不分配角色）
@@ -132,6 +134,15 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
             user=current_user,
             character=None  # 角色选择阶段再分配
         )
+        
+        # 通过WebSocket通知房间内其他用户
+        await manager.broadcast_to_room(request.room_code, {
+            "type": "player_joined",
+            "data": {
+                "user_id": current_user.id,
+                "nickname": current_user.nickname
+            }
+        }, exclude_user=current_user.id)
         
         return ApiResponse(
             code=200,
@@ -209,8 +220,6 @@ async def get_room_list(page: int = 1, page_size: int = 20, status: Optional[str
         room_list = []
         for room in rooms:
             # 添加空值检查
-            if not room.script or not room.host_user:
-                continue  # 跳过数据不完整的房间
             
             player_count = len(room.players) if hasattr(room, 'players') else 0
             room_list.append({
@@ -218,7 +227,7 @@ async def get_room_list(page: int = 1, page_size: int = 20, status: Optional[str
                 "script_title": "" if not room.script else room.script.title,
                 "host_nickname": room.host_user.nickname,
                 "player_count": player_count,
-                "max_players": room.script.player_count_max,
+                "max_players": room.max_players,
                 "status": room.status,
                 "has_password": bool(room.room_password),
                 "created_at": room.created_at
