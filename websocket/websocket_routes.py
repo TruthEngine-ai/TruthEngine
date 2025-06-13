@@ -142,7 +142,8 @@ async def _send_room_status_internal(room_code: str, user_id: int):
                 "status": room.status,
                 "current_stage": room.current_stage.name if room.current_stage else None,
                 "ai_dm_personality": room.ai_dm_personality,
-                "game_settings": room.game_setting
+                "game_settings": room.game_setting,
+                "max_players": room.max_players,
             },
             "script": {
                 "id": room.script.id,

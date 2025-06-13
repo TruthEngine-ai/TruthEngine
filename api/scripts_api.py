@@ -36,18 +36,26 @@ async def call_ai_api(prompt: str, max_retries: int = 1) -> str:
         "model": settings.API_MODEL,
         "messages": [
             {"role": "system", "content": get_system_prompt()},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
+            # {"role": "system", "content": "你是一位精通悬疑故事创作和逻辑游戏设计的AI剧本大师。"},
+            # {"role": "user", "content": "现在，请根据以下输入生成剧本：剧本主题: 校园 玩家人数: 3 剧本难度: 困难 AI主持人性格: 活泼 游戏时长: 90分钟?"}
         ],
         "temperature": settings.API_TEMPERATURE,
-        "max_tokens": 4096
+        "max_tokens": 8192,
+        "stream": False  # 确保不使用流式输出
     }
+    
+
+    # print("system prompt:", get_system_prompt())
+    # print("user prompt:", prompt)
+    logging.info(f"调用 AI API: {settings.API_URL}，模型: {settings.API_MODEL}")
     
     # 优化超时设置
     timeout = httpx.Timeout(
-        connect=60.0,    # 连接超时（1分钟）
+        connect=600.0,    # 连接超时（1分钟）
         read=900.0,      # 读取超时（15分钟）
-        write=60.0,      # 写入超时
-        pool=60.0        # 连接池超时
+        write=600.0,      # 写入超时
+        pool=600.0        # 连接池超时
     )
     
     last_error = None
@@ -102,7 +110,7 @@ async def call_ai_api(prompt: str, max_retries: int = 1) -> str:
     raise HTTPException(status_code=500, detail=f"AI 接口调用失败，已重试 {max_retries} 次。最后错误: {last_error}")
 
 def get_system_prompt() -> str:
-    """获取系统提示词"""
+    # """获取系统提示词"""
     return """# 角色
 你是一位精通悬疑故事创作和逻辑游戏设计的AI剧本大师。
 
@@ -174,7 +182,7 @@ def get_system_prompt() -> str:
 }"""
 
 def create_user_prompt(theme: str, player_count: int, difficulty: str, ai_personality: str, duration_mins: int) -> str:
-    """创建用户提示词"""
+    # """创建用户提示词"""
     return f"""# 开始生成
 现在，请根据以下输入生成剧本：
 - **剧本主题**: {theme}
@@ -291,13 +299,13 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         )
         
         # 调用 AI 接口
-        # ai_response = await call_ai_api(user_prompt)
+        ai_response = await call_ai_api(user_prompt)
         
-        # print(f"AI Response: {ai_response}")
-        # # 解析并保存到数据库
-        # script_id = await parse_and_save_script(ai_response, current_user.id, root.max_player, request.duration_mins)
+        print(f"AI Response: {ai_response}")
+        # 解析并保存到数据库
+        script_id = await parse_and_save_script(ai_response, current_user.id, room.max_players, request.duration_mins)
         
-        script_id = 4 # 模拟生成的剧本ID
+        # script_id = 4 # 模拟生成的剧本ID
         
         # 将剧本关联到房间
         room = await GameRooms.get(room_code=request.room_code)
