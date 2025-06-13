@@ -70,6 +70,7 @@ async def create_room(request: CreateRoomRequest):
                 host_user = await Users.get(id=request.user_id)
             except DoesNotExist:
                 raise HTTPException(status_code=404, detail="用户不存在")
+            
         else:
             # 游客身份，创建临时用户
             host_user = await get_or_create_guest_user()

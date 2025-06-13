@@ -11,21 +11,11 @@ from model.entity.Scripts import (
     CharacterStageGoals, ScriptClues, Users
 )
 from model.dto.response import ApiResponse
+from model.dto.ScriptsDto import CreateScriptRequest, GenerateScriptResponse
 from conf.config import settings
 
 router = APIRouter(prefix="/api/scripts", tags=["剧本管理"])
 
-class CreateScriptRequest(BaseModel):
-    theme: str
-    player_count: int
-    difficulty: str
-    ai_dm_personality: str
-    author_id: int
-
-class GenerateScriptResponse(BaseModel):
-    script_id: int
-    title: str
-    description: str
 
 async def call_ai_api(prompt: str) -> str:
     """调用 AI 接口生成剧本内容"""
@@ -38,10 +28,6 @@ async def call_ai_api(prompt: str) -> str:
     }
     
     
-    print(settings.API_URL)
-    print(settings.API_MODEL)
-    print(settings.API_TEMPERATURE)
-    
     payload = {
         "model": settings.API_MODEL,
         "messages": [
@@ -49,7 +35,7 @@ async def call_ai_api(prompt: str) -> str:
             {"role": "user", "content": prompt}
         ],
         "temperature": settings.API_TEMPERATURE,
-        "max_tokens": 8000
+        "max_tokens": 32000
     }
     
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -78,6 +64,7 @@ def get_system_prompt() -> str:
 - **玩家人数 (Player Count)**: 一个数字，例如 6
 - **剧本难度 (Difficulty)**: '新手', '进阶', '烧脑'
 - **AI主持人性格 (AI DM Personality)**: '严肃', '幽默', '神秘'
+- **游戏时长 (Duration Mins)**: '30', '45', '60'
 
 # 核心规则
 1.  **JSON格式**: 你的最终输出必须是一个完整的、无语法错误的JSON对象。不要在JSON代码块前后添加任何额外的解释或文字。
@@ -97,6 +84,7 @@ def get_system_prompt() -> str:
     "difficulty": "[剧本难度]",
     "tags": "根据主题生成的标签，用逗号分隔，例如'现代,悬疑,本格'",
     "ai_dm_personality": "[AI主持人性格]"
+    "duration_mins":"[游戏时长]"
   },
   "characters": [
     {
@@ -134,16 +122,17 @@ def get_system_prompt() -> str:
   ]
 }"""
 
-def create_user_prompt(theme: str, player_count: int, difficulty: str, ai_personality: str) -> str:
+def create_user_prompt(theme: str, player_count: int, difficulty: str, ai_personality: str, duration_mins: int) -> str:
     """创建用户提示词"""
     return f"""# 开始生成
 现在，请根据以下输入生成剧本：
 - **剧本主题**: {theme}
 - **玩家人数**: {player_count}
 - **剧本难度**: {difficulty}
-- **AI主持人性格**: {ai_personality}"""
+- **AI主持人性格**: {ai_personality}
+- **游戏时长**: {duration_mins}分钟"""
 
-async def parse_and_save_script(ai_response: str, author_id: int) -> int:
+async def parse_and_save_script(ai_response: str, author_id: int, play_count:int, duration_mins: int) -> int:
     """解析 AI 响应并保存到数据库"""
     try:
         # 清理 AI 响应，移除可能的代码块标记
@@ -165,9 +154,9 @@ async def parse_and_save_script(ai_response: str, author_id: int) -> int:
             script = await Scripts.create(
                 title=script_data["script"]["title"],
                 description=script_data["script"]["description"],
-                player_count_min=script_data["script"]["player_count"],
-                player_count_max=script_data["script"]["player_count"],
-                duration_mins=90,  # 默认90分钟
+                player_count_min=play_count,#script_data["script"]["player_count"],
+                player_count_max=play_count,#script_data["script"]["player_count"],
+                duration_mins=duration_mins,  # 使用传入的时长参数
                 difficulty=script_data["script"]["difficulty"],
                 tags=script_data["script"]["tags"],
                 author=author,
@@ -241,7 +230,8 @@ async def generate_script(request: CreateScriptRequest):
             request.theme,
             request.player_count,
             request.difficulty,
-            request.ai_dm_personality
+            request.ai_dm_personality,
+            request.duration_mins
         )
         
         # 调用 AI 接口
@@ -249,7 +239,7 @@ async def generate_script(request: CreateScriptRequest):
         
         print(f"AI Response: {ai_response}")
         # 解析并保存到数据库
-        script_id = await parse_and_save_script(ai_response, request.author_id)
+        script_id = await parse_and_save_script(ai_response, request.author_id,request.player_count, request.duration_mins)
         
         # 获取生成的剧本信息
         script = await Scripts.get(id=script_id)
@@ -259,8 +249,7 @@ async def generate_script(request: CreateScriptRequest):
             msg="剧本生成成功",
             data={
                 "script_id": script.id,
-                "title": script.title,
-                "description": script.description
+                "script_info": ai_response
             }
         )
         
