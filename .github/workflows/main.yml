@@ -3,9 +3,8 @@ name: Build and Publish Docker Image
 # 触发条件：当推送到main分支或创建release时
 on:
   push:
-    branches: ['main']
-  release:
-    types: [published]
+    tags:
+      - 'v*.*.*'
 
 # 环境变量
 env:
