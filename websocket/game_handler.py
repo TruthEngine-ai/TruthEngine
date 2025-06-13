@@ -5,6 +5,11 @@ from tortoise.exceptions import DoesNotExist
 
 from model.entity.Scripts import GameRooms, GamePlayers, GameLogs, ScriptCharacters
 from .connection_manager import manager
+from .notification_types import (
+    MessageType, create_message, create_error_message,
+    ChatData, PlayerActionData, CharacterSelectedData,
+    PlayerReadyData, AllReadyData, GameStartedData, PrivateMessageData
+)
 
 class GameHandler:
     async def handle_message(self, websocket, room_code: str, user_id: int, message: Dict[str, Any]):
@@ -12,23 +17,23 @@ class GameHandler:
         message_type = message.get("type")
         
         handlers = {
-            "chat": self.handle_chat,
-            "select_character": self.handle_select_character,
-            "ready": self.handle_ready,
-            "start_game": self.handle_start_game,
-            "player_action": self.handle_player_action,
-            "private_message": self.handle_private_message,
-            "game_vote": self.handle_game_vote
+            MessageType.CHAT.value: self.handle_chat,
+            MessageType.READY.value: self.handle_ready,
+            MessageType.SELECT_CHARACTER.value: self.handle_select_character,
+            MessageType.START_GAME.value: self.handle_start_game,
+            MessageType.PLAYER_ACTION.value: self.handle_player_action,
+            MessageType.PRIVATE_MESSAGE.value: self.handle_private_message,
+            MessageType.GAME_VOTE.value: self.handle_game_vote
         }
         
         handler = handlers.get(message_type)
         if handler:
             await handler(room_code, user_id, message.get("data", {}))
         else:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": f"未知消息类型: {message_type}"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message(f"未知消息类型: {message_type}"), 
+                user_id
+            )
 
     async def handle_chat(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理聊天消息"""
@@ -45,21 +50,18 @@ class GameHandler:
             )
             
             # 广播消息给房间内所有用户
-            await manager.broadcast_to_room(room_code, {
-                "type": "chat",
-                "data": {
-                    "user_id": user_id,
-                    "nickname": player.user.nickname,
-                    "message": data.get("message", ""),
-                    "timestamp": datetime.now().isoformat()
-                }
-            })
+            await manager.broadcast_to_room(room_code, create_message(MessageType.CHAT, {
+                "user_id": user_id,
+                "nickname": player.user.nickname,
+                "message": data.get("message", ""),
+                "timestamp": datetime.now().isoformat()
+            }))
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间或用户不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
 
     async def handle_select_character(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理角色选择"""
@@ -75,10 +77,10 @@ class GameHandler:
                 ).first()
                 
                 if existing_player and existing_player.user_id != user_id:
-                    await manager.send_personal_message({
-                        "type": "error",
-                        "message": "该角色已被其他玩家选择"
-                    }, user_id)
+                    await manager.send_personal_message(
+                        create_error_message("该角色已被其他玩家选择"), 
+                        user_id
+                    )
                     return
                 
                 # 分配角色
@@ -87,20 +89,17 @@ class GameHandler:
                 await player.save()
                 
                 # 通知房间内所有用户
-                await manager.broadcast_to_room(room_code, {
-                    "type": "character_selected",
-                    "data": {
-                        "user_id": user_id,
-                        "character_id": character_id,
-                        "character_name": character.name
-                    }
-                })
+                await manager.broadcast_to_room(room_code, create_message(MessageType.CHARACTER_SELECTED, {
+                    "user_id": user_id,
+                    "character_id": character_id,
+                    "character_name": character.name
+                }))
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间、用户或角色不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间、用户或角色不存在"), 
+                user_id
+            )
 
     async def handle_ready(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理准备状态"""
@@ -112,29 +111,25 @@ class GameHandler:
             await player.save()
             
             # 通知房间内所有用户
-            await manager.broadcast_to_room(room_code, {
-                "type": "player_ready",
-                "data": {
-                    "user_id": user_id,
-                    "ready": player.is_ready
-                }
-            })
+            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_READY, {
+                "user_id": user_id,
+                "ready": player.is_ready
+            }))
             
             # 检查是否所有玩家都准备好了
             all_players = await GamePlayers.filter(room=room).prefetch_related('character')
             all_ready = all(p.is_ready and p.character for p in all_players)
             
             if all_ready and len(all_players) >= room.script.player_count_min:
-                await manager.broadcast_to_room(room_code, {
-                    "type": "all_ready",
-                    "data": {"can_start": True}
-                })
+                await manager.broadcast_to_room(room_code, create_message(MessageType.ALL_READY, {
+                    "can_start": True
+                }))
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间或用户不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
 
     async def handle_start_game(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理开始游戏"""
@@ -143,19 +138,19 @@ class GameHandler:
             
             # 检查是否是房主
             if room.host_user_id != user_id:
-                await manager.send_personal_message({
-                    "type": "error",
-                    "message": "只有房主可以开始游戏"
-                }, user_id)
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以开始游戏"), 
+                    user_id
+                )
                 return
             
             # 检查游戏是否可以开始
             all_players = await GamePlayers.filter(room=room).prefetch_related('character')
             if not all(p.is_ready and p.character for p in all_players):
-                await manager.send_personal_message({
-                    "type": "error",
-                    "message": "还有玩家未准备好或未选择角色"
-                }, user_id)
+                await manager.send_personal_message(
+                    create_error_message("还有玩家未准备好或未选择角色"), 
+                    user_id
+                )
                 return
             
             # 开始游戏
@@ -170,19 +165,17 @@ class GameHandler:
             await room.save()
             
             # 通知所有玩家游戏开始
-            await manager.broadcast_to_room(room_code, {
-                "type": "game_started",
-                "data": {
-                    "stage_name": first_stage.name if first_stage else "游戏开始",
-                    "stage_narrative": first_stage.opening_narrative if first_stage else ""
-                }
-            })
+            await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_STARTED, {
+                "stage_name": first_stage.name if first_stage else "游戏开始",
+                "stage_narrative": first_stage.opening_narrative if first_stage else "",
+                "current_stage_number": first_stage.stage_number if first_stage else 1
+            }))
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间不存在"), 
+                user_id
+            )
 
     async def handle_private_message(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理私聊消息"""
@@ -202,21 +195,19 @@ class GameHandler:
             )
             
             # 发送给接收者
-            await manager.send_personal_message({
-                "type": "private_message",
-                "data": {
-                    "sender_id": user_id,
-                    "sender_nickname": sender.user.nickname,
-                    "message": data.get("message", ""),
-                    "timestamp": datetime.now().isoformat()
-                }
-            }, recipient_id)
+            await manager.send_personal_message(create_message(MessageType.PRIVATE_MESSAGE, {
+                "sender_id": user_id,
+                "sender_nickname": sender.user.nickname,
+                "recipient_id": recipient_id,
+                "message": data.get("message", ""),
+                "timestamp": datetime.now().isoformat()
+            }), recipient_id)
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间或用户不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
 
     async def handle_player_action(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理玩家行动"""
@@ -233,25 +224,22 @@ class GameHandler:
             )
             
             # 广播行动给房间内所有用户
-            await manager.broadcast_to_room(room_code, {
-                "type": "player_action",
-                "data": {
-                    "user_id": user_id,
-                    "nickname": player.user.nickname,
-                    "action": data.get("action", ""),
-                    "timestamp": datetime.now().isoformat()
-                }
-            })
+            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_ACTION, {
+                "user_id": user_id,
+                "nickname": player.user.nickname,
+                "action": data.get("action", ""),
+                "timestamp": datetime.now().isoformat()
+            }))
             
         except DoesNotExist:
-            await manager.send_personal_message({
-                "type": "error",
-                "message": "房间或用户不存在"
-            }, user_id)
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
 
     async def handle_game_vote(self, room_code: str, user_id: int, data: Dict[str, Any]):
         """处理游戏投票"""
-        # 这里可以实现投票逻辑
+        # TODO: 实现投票逻辑
         pass
 
 # 全局游戏处理器实例

@@ -291,11 +291,13 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         )
         
         # 调用 AI 接口
-        ai_response = await call_ai_api(user_prompt)
+        # ai_response = await call_ai_api(user_prompt)
         
-        print(f"AI Response: {ai_response}")
-        # 解析并保存到数据库
-        script_id = await parse_and_save_script(ai_response, current_user.id, request.player_count, request.duration_mins)
+        # print(f"AI Response: {ai_response}")
+        # # 解析并保存到数据库
+        # script_id = await parse_and_save_script(ai_response, current_user.id, request.player_count, request.duration_mins)
+        
+        script_id = 4 # 模拟生成的剧本ID
         
         # 将剧本关联到房间
         room = await GameRooms.get(room_code=request.room_code)

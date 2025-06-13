@@ -8,6 +8,7 @@ from api.auth_api import get_current_user
 from model.entity.Scripts import GameRooms, GamePlayers
 from models.database import User as UserModel
 from utils.auth_util import decode_token
+from .notification_types import MessageType, create_message, create_error_message, validate_incoming_message
 
 router = APIRouter()
 
@@ -46,14 +47,11 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
     
     try:
         # 发送连接成功消息
-        await manager.send_personal_message({
-            "type": "connected",
-            "data": {
-                "room_code": room_code,
-                "user_id": user.id,
-                "nickname": user.nickname
-            }
-        }, user.id)
+        await manager.send_personal_message(create_message(MessageType.CONNECTED, {
+            "room_code": room_code,
+            "user_id": user.id,
+            "nickname": user.nickname
+        }), user.id)
         
         # 发送当前房间状态
         await send_room_status(room_code, user.id)
@@ -63,12 +61,23 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
             data = await websocket.receive_text()
             try:
                 message = json.loads(data)
+                
+                # 验证消息格式
+                message_type = message.get("type")
+                if not validate_incoming_message(message_type, message.get("data", {})):
+                    await manager.send_personal_message(
+                        create_error_message("无效的消息格式"),
+                        user.id
+                    )
+                    continue
+                
                 await game_handler.handle_message(websocket, room_code, user.id, message)
+                
             except json.JSONDecodeError:
-                await manager.send_personal_message({
-                    "type": "error",
-                    "message": "无效的JSON格式"
-                }, user.id)
+                await manager.send_personal_message(
+                    create_error_message("无效的JSON格式"),
+                    user.id
+                )
                 
     except WebSocketDisconnect:
         await manager.disconnect(user.id)
@@ -113,27 +122,24 @@ async def send_room_status(room_code: str, user_id: int):
                     "selected_by": selected_by
                 })
         
-        await manager.send_personal_message({
-            "type": "room_status",
-            "data": {
-                "room": {
-                    "code": room.room_code,
-                    "status": room.status,
-                    "current_stage": room.current_stage.name if room.current_stage else None,
-                    "ai_dm_personality": room.ai_dm_personality
-                },
-                "script": {
-                    "id": room.script.id,
-                    "title": room.script.title,
-                    "description": room.script.description
-                } if room.script else None,
-                "players": players,
-                "characters": characters
-            }
-        }, user_id)
+        await manager.send_personal_message(create_message(MessageType.ROOM_STATUS, {
+            "room": {
+                "code": room.room_code,
+                "status": room.status,
+                "current_stage": room.current_stage.name if room.current_stage else None,
+                "ai_dm_personality": room.ai_dm_personality
+            },
+            "script": {
+                "id": room.script.id,
+                "title": room.script.title,
+                "description": room.script.description
+            } if room.script else None,
+            "players": players,
+            "characters": characters
+        }), user_id)
         
     except Exception as e:
-        await manager.send_personal_message({
-            "type": "error",
-            "message": f"获取房间状态失败: {str(e)}"
-        }, user_id)
+        await manager.send_personal_message(
+            create_error_message(f"获取房间状态失败: {str(e)}"),
+            user_id
+        )

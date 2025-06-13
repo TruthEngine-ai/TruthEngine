@@ -20,6 +20,7 @@ from model.dto.RoomDto import (
 from .auth_api import get_current_user
 from models.database import User as UserModel
 from websocket.connection_manager import manager
+from websocket.notification_types import MessageType, create_message
 
 router = APIRouter(prefix="/api/room", tags=["房间管理"])
 
@@ -136,13 +137,11 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
         )
         
         # 通过WebSocket通知房间内其他用户
-        await manager.broadcast_to_room(request.room_code, {
-            "type": "player_joined",
-            "data": {
-                "user_id": current_user.id,
-                "nickname": current_user.nickname
-            }
-        }, exclude_user=current_user.id)
+        await manager.broadcast_to_room(request.room_code, create_message(MessageType.PLAYER_JOINED, {
+            "user_id": current_user.id,
+            "nickname": current_user.nickname,
+            "avatar_url": current_user.avatar_url
+        }), exclude_user=current_user.id)
         
         return ApiResponse(
             code=200,
