@@ -11,6 +11,7 @@ class MessageType(str, Enum):
     
     # 房间状态相关
     ROOM_STATUS = "room_status"
+    ROOM_SETTINGS_UPDATED = "room_settings_updated"
     PLAYER_JOINED = "player_joined"
     PLAYER_LEFT = "player_left"
     ROOM_DISSOLVED = "room_dissolved"
@@ -52,6 +53,9 @@ class MessageType(str, Enum):
     # AI DM相关
     AI_MESSAGE = "ai_message"
     AI_PROMPT = "ai_prompt"
+    
+    # 房间设置相关
+    UPDATE_ROOM_SETTINGS = "update_room_settings"
 
 class NotificationData(BaseModel):
     """通知数据基类"""
@@ -166,6 +170,12 @@ class AIMessageData(NotificationData):
     message_type: str
     target_user_id: Optional[int] = None  # None表示广播
 
+class RoomSettingsUpdatedData(NotificationData):
+    """房间设置更新数据"""
+    updated_by: int
+    updated_by_nickname: str
+    settings: Dict[str, Any]
+
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
     MessageType.CHAT: ChatData,
@@ -175,6 +185,7 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.PLAYER_ACTION: dict,  # {"action": str}
     MessageType.PRIVATE_MESSAGE: dict,  # {"recipient_id": int, "message": str}
     MessageType.GAME_VOTE: dict,  # {"vote_type": str, "option": str}
+    MessageType.UPDATE_ROOM_SETTINGS: dict,  # {"theme": str, "difficulty": str, "ai_dm_personality": str, "duration_mins": int}
 }
 
 # 发出消息类型映射
@@ -182,6 +193,7 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.CONNECTED: ConnectionData,
     MessageType.ERROR: ErrorData,
     MessageType.ROOM_STATUS: RoomStatusData,
+    MessageType.ROOM_SETTINGS_UPDATED: RoomSettingsUpdatedData,
     MessageType.PLAYER_JOINED: PlayerJoinedData,
     MessageType.PLAYER_LEFT: PlayerLeftData,
     MessageType.CHAT: ChatData,

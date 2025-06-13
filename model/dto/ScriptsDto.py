@@ -5,10 +5,10 @@ from .response import ApiResponse
 
 class CreateScriptRequest(BaseModel):
     theme: str
-    player_count: int
+    # player_count: int
     difficulty: str
     ai_dm_personality: str
-    author_id: int
+    # author_id: int
     room_code: str
     duration_mins: int = 90  # 添加游戏时长参数，默认90分钟
 

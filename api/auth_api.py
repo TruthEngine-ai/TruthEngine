@@ -11,7 +11,7 @@ from utils.auth_util import (
     UserCreate, verify_password, create_access_token,
     get_password_hash, oauth2_scheme, decode_token
 )
-from model.entity.Scripts import Users as UserModel
+from model.entity.Scripts import Users as UserModel, GamePlayers, GameRooms
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -180,13 +180,33 @@ async def register_guest_user(nickname: str):
 async def read_users_me(
         current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
+    # 查询用户当前房间
+    current_room = None
+    try:
+        # 查找用户当前参与的房间（状态不是已结束或已解散的房间）
+        player = await GamePlayers.filter(
+            user_id=current_user.id
+        ).prefetch_related('room').order_by('-created_at').first()
+        
+        if player and player.room.status not in ['已结束', '已解散']:
+            current_room = {
+                "room_code": player.room.room_code,
+                "status": player.room.status,
+                "is_host": player.room.host_user_id == current_user.id
+            }
+    except Exception as e:
+        print(f"获取用户当前房间失败: {str(e)}")
+        # 如果查询失败，current_room 保持为 None
+    
     return ApiResponse(
         code=200,
         msg="获取用户信息成功",
         data={
+            "id": current_user.id,
             "username": current_user.username,
             "email": current_user.email,
             "nickname": current_user.nickname,
-            "disabled": not current_user.is_active
+            "disabled": not current_user.is_active,
+            "current_room": current_room
         }
     )

@@ -83,7 +83,21 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         await manager.disconnect(user.id)
 
 async def send_room_status(room_code: str, user_id: int):
-    """发送房间当前状态"""
+    """发送房间当前状态给指定用户"""
+    await _send_room_status_internal(room_code, user_id)
+
+async def broadcast_room_status(room_code: str):
+    """向房间内所有用户广播房间状态"""
+    try:
+        # 获取房间内所有在线用户
+        connected_users = manager.get_room_users(room_code)
+        for user_id in connected_users:
+            await _send_room_status_internal(room_code, user_id)
+    except Exception as e:
+        print(f"广播房间状态失败: {str(e)}")
+
+async def _send_room_status_internal(room_code: str, user_id: int):
+    """内部函数：发送房间状态"""
     try:
         room = await GameRooms.get(room_code=room_code).prefetch_related(
             'script', 'host_user', 'players__user', 'players__character', 'current_stage'
@@ -127,7 +141,8 @@ async def send_room_status(room_code: str, user_id: int):
                 "code": room.room_code,
                 "status": room.status,
                 "current_stage": room.current_stage.name if room.current_stage else None,
-                "ai_dm_personality": room.ai_dm_personality
+                "ai_dm_personality": room.ai_dm_personality,
+                "game_settings": room.game_setting
             },
             "script": {
                 "id": room.script.id,

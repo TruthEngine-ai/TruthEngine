@@ -23,7 +23,8 @@ class GameHandler:
             MessageType.START_GAME.value: self.handle_start_game,
             MessageType.PLAYER_ACTION.value: self.handle_player_action,
             MessageType.PRIVATE_MESSAGE.value: self.handle_private_message,
-            MessageType.GAME_VOTE.value: self.handle_game_vote
+            MessageType.GAME_VOTE.value: self.handle_game_vote,
+            MessageType.UPDATE_ROOM_SETTINGS.value: self.handle_update_room_settings
         }
         
         handler = handlers.get(message_type)
@@ -94,6 +95,10 @@ class GameHandler:
                     "character_id": character_id,
                     "character_name": character.name
                 }))
+                
+                # 广播房间状态更新
+                from .websocket_routes import broadcast_room_status
+                await broadcast_room_status(room_code)
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -115,6 +120,10 @@ class GameHandler:
                 "user_id": user_id,
                 "ready": player.is_ready
             }))
+            
+            # 广播房间状态更新
+            from .websocket_routes import broadcast_room_status
+            await broadcast_room_status(room_code)
             
             # 检查是否所有玩家都准备好了
             all_players = await GamePlayers.filter(room=room).prefetch_related('character')
@@ -241,6 +250,61 @@ class GameHandler:
         """处理游戏投票"""
         # TODO: 实现投票逻辑
         pass
+
+    async def handle_update_room_settings(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理房间设置更新"""
+        try:
+            room = await GameRooms.get(room_code=room_code)
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
+            
+            # 检查是否是房主
+            if room.host_user_id != user_id:
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以修改房间设置"), 
+                    user_id
+                )
+                return
+            
+            # 检查房间状态
+            if room.status != '等待中':
+                await manager.send_personal_message(
+                    create_error_message("只能在等待中状态修改房间设置"), 
+                    user_id
+                )
+                return
+            
+            # 更新游戏设置
+            current_settings = room.game_setting or {}
+            
+            if "theme" in data and data["theme"] is not None:
+                current_settings["theme"] = data["theme"]
+            if "difficulty" in data and data["difficulty"] is not None:
+                current_settings["difficulty"] = data["difficulty"]
+            if "ai_dm_personality" in data and data["ai_dm_personality"] is not None:
+                current_settings["ai_dm_personality"] = data["ai_dm_personality"]
+                room.ai_dm_personality = data["ai_dm_personality"]  # 同时更新主字段
+            if "duration_mins" in data and data["duration_mins"] is not None:
+                current_settings["duration_mins"] = data["duration_mins"]
+            
+            room.game_setting = current_settings
+            await room.save()
+            
+            # 广播设置更新给房间内所有用户
+            await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED, {
+                "updated_by": user_id,
+                "updated_by_nickname": player.user.nickname,
+                "settings": current_settings
+            }))
+            
+            # 广播房间状态更新
+            from .websocket_routes import broadcast_room_status
+            await broadcast_room_status(room_code)
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
 
 # 全局游戏处理器实例
 game_handler = GameHandler()

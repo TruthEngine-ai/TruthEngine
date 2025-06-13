@@ -3,6 +3,8 @@ from fastapi import WebSocket
 import json
 import asyncio
 from datetime import datetime
+from .notification_types import MessageType, create_message
+from model.entity.Scripts import Users as UserModel
 
 class ConnectionManager:
     def __init__(self):
@@ -14,7 +16,7 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, room_code: str, user_id: int):
         """用户连接到房间"""
         await websocket.accept()
-        
+        user = await UserModel.filter(id=user_id, is_active=True).first()
         if room_code not in self.room_connections:
             self.room_connections[room_code] = {}
         
@@ -23,10 +25,14 @@ class ConnectionManager:
         
         # 通知房间内其他用户有新用户加入
         await self.broadcast_to_room(room_code, {
-            "type": "user_joined",
+            "type": MessageType.PLAYER_JOINED,
             "user_id": user_id,
+            "nickname": user.nickname,  # 假设昵称为 User{user_id}
             "timestamp": datetime.now().isoformat()
         }, exclude_user=user_id)
+        
+        # 广播房间状态更新
+        await self._broadcast_room_status_after_delay(room_code)
 
     async def disconnect(self, user_id: int):
         """用户断开连接"""
@@ -42,12 +48,28 @@ class ConnectionManager:
                 else:
                     # 通知房间内其他用户有用户离开
                     await self.broadcast_to_room(room_code, {
-                        "type": "user_left",
+                        "type": MessageType.PLAYER_LEFT,
                         "user_id": user_id,
                         "timestamp": datetime.now().isoformat()
                     })
+                    
+                    # 广播房间状态更新
+                    await self._broadcast_room_status_after_delay(room_code)
             
             del self.user_rooms[user_id]
+
+    async def _broadcast_room_status_after_delay(self, room_code: str):
+        """延迟广播房间状态（避免循环导入）"""
+        async def delayed_broadcast():
+            await asyncio.sleep(0.1)  # 短暂延迟确保数据库操作完成
+            try:
+                from .websocket_routes import broadcast_room_status
+                await broadcast_room_status(room_code)
+            except Exception as e:
+                print(f"延迟广播房间状态失败: {str(e)}")
+        
+        # 创建异步任务
+        asyncio.create_task(delayed_broadcast())
 
     async def send_personal_message(self, message: dict, user_id: int):
         """发送个人消息"""

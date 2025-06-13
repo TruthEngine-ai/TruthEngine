@@ -6,6 +6,7 @@ from typing import Annotated
 
 import random
 import string
+import json
 from datetime import datetime, timedelta
 from tortoise.exceptions import DoesNotExist, IntegrityError
 
@@ -29,6 +30,7 @@ class CreateRoomRequest(BaseModel):
     room_password: Optional[str] = ""
     ai_dm_personality: Optional[str] = "严肃"
     player_count_max : int
+    game_type: Optional[str] = "script"
 
 class JoinRoomRequest(BaseModel):
     room_code: str
@@ -42,6 +44,12 @@ class RoomResponse(BaseModel):
     max_players: int
     status: str
     created_at: datetime
+
+class UpdateRoomSettingsRequest(BaseModel):
+    theme: Optional[str] = None
+    difficulty: Optional[str] = None
+    ai_dm_personality: Optional[str] = None
+    duration_mins: Optional[int] = None
 
 def generate_room_code() -> str:
     """生成6位房间码"""
@@ -66,7 +74,6 @@ async def get_or_create_guest_user() -> Users:
 async def create_room(request: CreateRoomRequest, current_user: Annotated[UserModel, Depends(get_current_user)] ):
     """创建房间"""
     try:
-        # # 验证剧本是否存在
         # 生成唯一房间码
         while True:
             room_code = generate_room_code()
@@ -74,13 +81,24 @@ async def create_room(request: CreateRoomRequest, current_user: Annotated[UserMo
             if not existing_room:
                 break
         
+        # 处理游戏设置
+        game_setting = None
+        if request.game_type == "script":
+            game_setting = {
+                "theme": "",
+                "difficulty":  "", 
+                "ai_dm_personality": "",
+                "duration_mins": 0
+            }
+        
         # 创建房间
         room = await GameRooms.create(
             room_code=room_code,
             room_password=request.room_password or "",
             host_user=current_user,
             ai_dm_personality=request.ai_dm_personality,
-            player_count_max=request.player_count_max
+            player_count_max=request.player_count_max,
+            game_setting=game_setting
         )
         
         # 房主自动加入房间
@@ -170,6 +188,15 @@ async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(
         if not player:
             raise HTTPException(status_code=404, detail="用户不在此房间中")
         
+        # 断开用户的WebSocket连接
+        await manager.disconnect(current_user.id)
+        
+        # # 通知房间内其他用户有用户离开
+        # await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT, {
+        #     "user_id": current_user.id,
+        #     "nickname": current_user.nickname
+        # }))
+        
         # 删除玩家记录
         await player.delete()
         
@@ -181,6 +208,18 @@ async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(
                 new_host = remaining_players[0].user
                 room.host_user = new_host
                 await room.save()
+                
+                # 通知房间内用户房主转移
+                await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT, {
+                    "user_id": current_user.id,
+                    "nickname": current_user.nickname,
+                    "is_host_transfer": True,
+                    "new_host_id": new_host.id
+                }))
+                
+                # 广播房间状态更新
+                from websocket.websocket_routes import broadcast_room_status
+                await broadcast_room_status(room_code)
             else:
                 # 房间无人，删除房间
                 await room.delete()
@@ -189,6 +228,10 @@ async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(
                     msg="退出房间成功，房间已解散",
                     data={"room_dissolved": True}
                 )
+        else:
+            # 非房主离开，只需广播房间状态更新
+            from websocket.websocket_routes import broadcast_room_status
+            await broadcast_room_status(room_code)
         
         return ApiResponse(
             code=200,
@@ -354,6 +397,67 @@ async def cleanup_expired_rooms():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"清理房间失败: {str(e)}")
+
+@router.put("/settings/{room_code}")
+async def update_room_settings(
+    room_code: str, 
+    request: UpdateRoomSettingsRequest,
+    current_user: Annotated[UserModel, Depends(get_current_user)]
+):
+    """修改房间设置"""
+    try:
+        room = await GameRooms.get(room_code=room_code)
+        
+        # 验证是否为房主
+        if room.host_user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只有房主可以修改房间设置")
+        
+        # 验证房间状态
+        if room.status != '等待中':
+            raise HTTPException(status_code=400, detail="只能在等待中状态修改房间设置")
+        
+        # 更新游戏设置
+        current_settings = room.game_setting or {}
+        
+        if request.theme is not None:
+            current_settings["theme"] = request.theme
+        if request.difficulty is not None:
+            current_settings["difficulty"] = request.difficulty
+        if request.ai_dm_personality is not None:
+            current_settings["ai_dm_personality"] = request.ai_dm_personality
+            room.ai_dm_personality = request.ai_dm_personality  # 同时更新主字段
+        if request.duration_mins is not None:
+            current_settings["duration_mins"] = request.duration_mins
+        
+        room.game_setting = current_settings
+        await room.save()
+        
+        # 广播房间状态更新
+        from websocket.websocket_routes import broadcast_room_status
+        await broadcast_room_status(room_code)
+        
+        # 通过WebSocket通知房间内所有用户设置已更新
+        await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED, {
+            "updated_by": current_user.id,
+            "updated_by_nickname": current_user.nickname,
+            "settings": current_settings
+        }))
+        
+        return ApiResponse(
+            code=200,
+            msg="房间设置更新成功",
+            data={
+                "room_code": room_code,
+                "game_setting": current_settings
+            }
+        )
+        
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="房间不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新房间设置失败: {str(e)}")
 
 
 

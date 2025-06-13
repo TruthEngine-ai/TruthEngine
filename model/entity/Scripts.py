@@ -104,6 +104,7 @@ class GameRooms(BaseModel):
     script = fields.ForeignKeyField('models.Scripts', related_name='game_rooms',null=True)
     host_user = fields.ForeignKeyField('models.Users', related_name='hosted_rooms')
     max_players = fields.IntField(default=3)
+    game_setting=fields.JSONField(null=True)
     status = fields.CharField(
         max_length=10,
         choices=[('等待中', '等待中'), ('进行中', '进行中'), ('投票中', '投票中'), 

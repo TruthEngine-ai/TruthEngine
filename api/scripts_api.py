@@ -284,7 +284,7 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         # 创建用户提示词
         user_prompt = create_user_prompt(
             request.theme,
-            request.player_count,
+            room.max_players,
             request.difficulty,
             request.ai_dm_personality,
             request.duration_mins
@@ -295,7 +295,7 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         
         # print(f"AI Response: {ai_response}")
         # # 解析并保存到数据库
-        # script_id = await parse_and_save_script(ai_response, current_user.id, request.player_count, request.duration_mins)
+        # script_id = await parse_and_save_script(ai_response, current_user.id, root.max_player, request.duration_mins)
         
         script_id = 4 # 模拟生成的剧本ID
         
