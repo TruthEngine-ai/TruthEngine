@@ -1,98 +1,215 @@
-import { Card, Form, Input, Button, Typography, theme, Row, Col, InputNumber } from 'antd';
-import { UserOutlined, LockOutlined, PlusCircleOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Card, Button, Typography, Row, Col, Space, Input, theme, Tooltip, Avatar } from 'antd';
+import { LoginOutlined, UserAddOutlined, PlayCircleOutlined, RedoOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
+import { useThemeContext } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import AuthModal from '../components/AuthModal';
 
 const { Title, Text } = Typography;
 
-const HomePage = () => {
-    const { token } = theme.useToken();
-    const [form] = Form.useForm();
-    const navigate = useNavigate();
+const guestAdjectives = [
+    "迷雾中的", "神秘的", "沉默的", "暗夜的", "智慧的", "正义的",
+    "冷静的", "敏锐的", "隐秘的", "理性的", "勇敢的", "机智的",
+    "黑暗中的", "真相的", "逻辑的", "细致的", "犀利的", "深沉的",
+    "专注的", "严谨的", "洞察的", "睿智的", "果断的", "精明的",
+    "缜密的", "坚定的", "冷酷的", "敏感的", "直觉的", "谨慎的"
+];
 
-    const onFinish = (values: any) => {
-        console.log('Create Room Details:', values);
-        navigate('/game/settings');
+const guestNouns = [
+    "侦探", "追寻者", "观察者", "编织者", "破解者", "证人",
+    "化身", "使者", "行者", "信徒", "捕手", "终结者",
+    "推理师", "分析员", "解谜者", "思考者", "审判者", "守护者",
+    "探索者", "研究者", "调查员", "审视者", "质疑者", "揭露者",
+    "监察者", "判官", "猎手", "学者", "智者", "先知"
+];
+
+const getRandomNickname = () => {
+    const adjective = guestAdjectives[Math.floor(Math.random() * guestAdjectives.length)];
+    const noun = guestNouns[Math.floor(Math.random() * guestNouns.length)];
+    return adjective + noun;
+};
+
+const HomePage: React.FC = () => {
+    const { token } = theme.useToken();
+    const { isDarkMode } = useThemeContext();
+    const { user, isLoggedIn, logout } = useAuth();
+    const navigate = useNavigate();
+    const [guestName, setGuestName] = useState<string>('');
+    const [authModalOpen, setAuthModalOpen] = useState(false);
+    const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+
+    useEffect(() => {
+        setGuestName(getRandomNickname());
+    }, []);
+
+    const handleGuestNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setGuestName(e.target.value);
     };
 
-    const cardTitleStyle = {
-        color: token.colorTextHeading, // 使用主题的标题颜色
-        marginBottom: 8,
+    const handleRandomizeNickname = () => {
+        setGuestName(getRandomNickname());
+    };
+
+    const handleGuestLogin = () => {
+        if (guestName.trim()) {
+            navigate('/app/create-room');
+        }
+    };
+
+    const handleLogin = () => {
+        setAuthModalTab('login');
+        setAuthModalOpen(true);
+    };
+
+    const handleRegister = () => {
+        setAuthModalTab('register');
+        setAuthModalOpen(true);
+    };
+
+    const handleLogout = () => {
+        logout();
+    };
+
+    const handleEnterGame = () => {
+        navigate('/app/create-room');
+    };
+
+    const pageStyle: React.CSSProperties = {
+        minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-    } as React.CSSProperties;
+        justifyContent: 'center',
+        padding: '20px',
+        background: isDarkMode
+            ? `radial-gradient(circle, ${token.colorBgElevated} 0%, ${token.colorBgLayout} 100%)`
+            : `radial-gradient(circle, #ffffff 0%, ${token.colorBgLayout} 100%)`,
+    };
 
-    const iconStyle = {
-        marginRight: 10, // 稍微增加间距
-        color: token.colorPrimary,
-        fontSize: '1.2em', // 稍微增大图标
+    const cardStyle: React.CSSProperties = {
+        width: '100%',
+        maxWidth: '480px',
+        background: token.colorBgContainer,
+        borderRadius: token.borderRadiusLG,
+        boxShadow: token.boxShadowSecondary,
+        padding: '20px',
+    };
+
+    const titleStyle: React.CSSProperties = {
+        textAlign: 'center',
+        color: token.colorTextHeading,
+        marginBottom: '12px',
+        fontWeight: 'bold',
+    };
+
+    const textStyle: React.CSSProperties = {
+        display: 'block',
+        textAlign: 'center',
+        color: token.colorTextSecondary,
+        marginBottom: '32px',
     };
 
     return (
-        <Row justify="center" align="middle" style={{ minHeight: 'calc(100vh - 200px)' /* 调整以适应Header/Footer */ }}>
-            <Col xs={22} sm={18} md={14} lg={10} xl={8}>
-                <Card
-                    variant="borderless"
-                    style={{
-                        background: token.colorBgContainer,
-                        borderRadius: token.borderRadiusLG,
-                        boxShadow: token.boxShadowSecondary, // 使用更显著的阴影
-                        padding: '24px', // 统一内边距
-                    }}
-                >
-                    <Title level={2} style={{ textAlign: 'center', color: token.colorTextHeading, marginBottom: 12 }}> {/* 增大标题 */}
-                        创建新房间
-                    </Title>
-                    <Text style={{ display: 'block', textAlign: 'center', color: token.colorTextSecondary, marginBottom: 32 }}> {/* 增加底部间距 */}
-                        输入房间信息，邀请好友开始推演。
-                    </Text>
+        <div style={pageStyle}>
+            <Card style={cardStyle} bordered={false}>
+                <Title level={1} style={titleStyle}>
+                    Truth Engine
+                </Title>
+                <Text style={textStyle}>
+                    欢迎来到真相推理的游戏平台。
+                </Text>
 
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        onFinish={onFinish}
-                        initialValues={{ roomSize: 4 }}
-                    >
-                        <Form.Item
-                            name="roomSize"
-                            label={
-                                <Title level={4} style={cardTitleStyle}> {/* 调整标题级别 */}
-                                    <UserOutlined style={iconStyle} /> 房间人数
-                                </Title>
-                            }
-                            rules={[{ required: true, message: '请输入房间可容纳人数!' }]}
-                        >
-                            <InputNumber
-                                min={2}
-                                max={10}
-                                style={{ width: '100%' }}
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    {isLoggedIn ? (
+                        <>
+                            <div style={{ textAlign: 'center', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                    <Avatar icon={<UserOutlined />} />
+                                    <Text strong>{user?.nickname || user?.username}</Text>
+                                </div>
+                                <Button
+                                    type="text"
+                                    icon={<LogoutOutlined />}
+                                    onClick={handleLogout}
+                                    size="small"
+                                >
+                                    退出
+                                </Button>
+                            </div>
+                            <Button
+                                type="primary"
+                                icon={<PlayCircleOutlined />}
                                 size="large"
-                                placeholder="例如：4"
-                            />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="roomPassword"
-                            label={
-                                <Title level={4} style={cardTitleStyle}> {/* 调整标题级别 */}
-                                    <LockOutlined style={iconStyle} /> 房间密码 (选填)
-                                </Title>
-                            }
-                        >
-                            <Input.Password
-                                size="large"
-                                placeholder="设置一个密码以保护你的房间"
-                            />
-                        </Form.Item>
-
-                        <Form.Item style={{ marginTop: 32, textAlign: 'center' }}>
-                            <Button type="primary" htmlType="submit" size="large" icon={<PlusCircleOutlined />}>
-                                创建房间并进入设置
+                                block
+                                onClick={handleEnterGame}
+                            >
+                                进入游戏
                             </Button>
-                        </Form.Item>
-                    </Form>
-                </Card>
-            </Col>
-        </Row>
+                        </>
+                    ) : (
+                        <>
+                            <Button
+                                type="primary"
+                                icon={<LoginOutlined />}
+                                size="large"
+                                block
+                                onClick={handleLogin}
+                            >
+                                登录账号
+                            </Button>
+                            <Button
+                                icon={<UserAddOutlined />}
+                                size="large"
+                                block
+                                onClick={handleRegister}
+                            >
+                                注册新用户
+                            </Button>
+
+                            <Row gutter={8} align="middle" style={{ marginTop: '20px' }}>
+                                <Col flex="auto">
+                                    <Input
+                                        size="large"
+                                        placeholder="输入游客昵称"
+                                        value={guestName}
+                                        onChange={handleGuestNameChange}
+                                        addonBefore={<UserOutlined />}
+                                    />
+                                </Col>
+                                <Col>
+                                    <Tooltip title="随机换个昵称">
+                                        <Button
+                                            icon={<RedoOutlined />}
+                                            size="large"
+                                            onClick={handleRandomizeNickname}
+                                            aria-label="随机昵称"
+                                        />
+                                    </Tooltip>
+                                </Col>
+                            </Row>
+
+                            <Button
+                                type="dashed"
+                                icon={<PlayCircleOutlined />}
+                                size="large"
+                                block
+                                onClick={handleGuestLogin}
+                                disabled={!guestName.trim()}
+                                style={{ borderColor: token.colorPrimary, color: token.colorPrimary }}
+                            >
+                                游客登录并创建房间
+                            </Button>
+                        </>
+                    )}
+                </Space>
+            </Card>
+
+            <AuthModal
+                open={authModalOpen}
+                onCancel={() => setAuthModalOpen(false)}
+                defaultTab={authModalTab}
+            />
+        </div>
     );
 };
 
