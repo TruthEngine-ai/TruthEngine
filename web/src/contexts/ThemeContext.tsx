@@ -53,6 +53,13 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
+    // 应用主题到body元素
+    if (typeof document !== 'undefined') {
+      document.body.className = isDarkMode ? 'dark' : 'light';
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       

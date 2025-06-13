@@ -29,7 +29,7 @@ const MainLayout = () => {
           <Space align="center">
             <Avatar size="large" icon={<RocketOutlined />} style={{ backgroundColor: colorPrimary }} />
             <Title level={3} style={{ color: colorTextBase, margin: 0, marginLeft: 12 }}>
-              剧本杀推演引擎
+              Truth Engine
             </Title>
           </Space>
         </RouterLink>

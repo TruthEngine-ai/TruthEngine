@@ -138,11 +138,9 @@ const AppWithTheme = () => {
 };
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
     <BrowserRouter>
       <ThemeProvider>
         <AppWithTheme />
       </ThemeProvider>
     </BrowserRouter>
-  </StrictMode>,
 );
