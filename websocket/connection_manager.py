@@ -13,9 +13,8 @@ class ConnectionManager:
         # 用户房间映射 {user_id: room_code}
         self.user_rooms: Dict[int, str] = {}
 
-    async def connect(self, websocket: WebSocket, room_code: str, user_id: int):
-        """用户连接到房间"""
-        await websocket.accept()
+    async def register_connection(self, websocket: WebSocket, room_code: str, user_id: int):
+        """注册用户连接到房间（不调用accept）"""
         user = await UserModel.filter(id=user_id, is_active=True).first()
         if room_code not in self.room_connections:
             self.room_connections[room_code] = {}
@@ -27,12 +26,21 @@ class ConnectionManager:
         await self.broadcast_to_room(room_code, {
             "type": MessageType.PLAYER_JOINED,
             "user_id": user_id,
-            "nickname": user.nickname,  # 假设昵称为 User{user_id}
+            "nickname": user.nickname,
+            "data": {
+                "user_id": user_id,
+                "nickname": user.nickname
+            },
             "timestamp": datetime.now().isoformat()
         }, exclude_user=user_id)
         
         # 广播房间状态更新
         await self._broadcast_room_status_after_delay(room_code)
+
+    async def connect(self, websocket: WebSocket, room_code: str, user_id: int):
+        """用户连接到房间（兼容旧接口，包含accept调用）"""
+        await websocket.accept()
+        await self.register_connection(websocket, room_code, user_id)
 
     async def disconnect(self, user_id: int):
         """用户断开连接"""

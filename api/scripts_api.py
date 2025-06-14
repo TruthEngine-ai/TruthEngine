@@ -37,8 +37,6 @@ async def call_ai_api(prompt: str, max_retries: int = 1) -> str:
         "messages": [
             {"role": "system", "content": get_system_prompt()},
             {"role": "user", "content": prompt},
-            # {"role": "system", "content": "你是一位精通悬疑故事创作和逻辑游戏设计的AI剧本大师。"},
-            # {"role": "user", "content": "现在，请根据以下输入生成剧本：剧本主题: 校园 玩家人数: 3 剧本难度: 困难 AI主持人性格: 活泼 游戏时长: 90分钟?"}
         ],
         "temperature": settings.API_TEMPERATURE,
         "max_tokens": 8192,
@@ -289,6 +287,27 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         if room.host_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="只有房主可以生成剧本")
         
+        # 通知WebSocket（如果房间有连接的用户）
+        try:
+            from websocket.connection_manager import manager
+            from websocket.notification_types import MessageType, create_message
+            
+            # 获取用户昵称
+            user = await Users.get(id=current_user.id)
+            
+            # 通知剧本生成开始
+            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED, {
+                "initiated_by": current_user.id,
+                "initiated_by_nickname": user.nickname,
+                "theme": request.theme,
+                "difficulty": request.difficulty,
+                "ai_dm_personality": request.ai_dm_personality,
+                "duration_mins": request.duration_mins
+            }))
+        except Exception as ws_error:
+            # WebSocket通知失败不影响主流程
+            print(f"WebSocket通知失败: {str(ws_error)}")
+        
         # 创建用户提示词
         user_prompt = create_user_prompt(
             request.theme,
@@ -304,8 +323,6 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         print(f"AI Response: {ai_response}")
         # 解析并保存到数据库
         script_id = await parse_and_save_script(ai_response, current_user.id, room.max_players, request.duration_mins)
-        
-        # script_id = 4 # 模拟生成的剧本ID
         
         # 将剧本关联到房间
         room = await GameRooms.get(room_code=request.room_code)
@@ -325,6 +342,20 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
                 "public_info": character.public_info
             })
         
+        # 通知WebSocket剧本生成完成
+        try:
+            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED, {
+                "script_id": script.id,
+                "script_title": script.title,
+                "characters": characters
+            }))
+            
+            # 广播房间状态更新
+            from websocket.websocket_routes import broadcast_room_status
+            await broadcast_room_status(request.room_code)
+        except Exception as ws_error:
+            print(f"WebSocket通知失败: {str(ws_error)}")
+        
         return ApiResponse(
             code=200,
             msg="剧本生成成功",
@@ -335,8 +366,24 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         )
         
     except HTTPException:
+        # 通知WebSocket剧本生成失败
+        try:
+            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED, {
+                "error_message": "剧本生成失败",
+                "initiated_by": current_user.id
+            }))
+        except:
+            pass
         raise   
     except Exception as e:
+        # 通知WebSocket剧本生成失败
+        try:
+            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED, {
+                "error_message": str(e),
+                "initiated_by": current_user.id
+            }))
+        except:
+            pass
         raise HTTPException(status_code=500, detail=f"生成剧本失败: {str(e)}")
 
 

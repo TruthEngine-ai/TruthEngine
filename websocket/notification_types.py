@@ -56,6 +56,12 @@ class MessageType(str, Enum):
     
     # 房间设置相关
     UPDATE_ROOM_SETTINGS = "update_room_settings"
+    
+    # 剧本生成相关
+    GENERATE_SCRIPT = "generate_script"
+    SCRIPT_GENERATION_STARTED = "script_generation_started"
+    SCRIPT_GENERATION_COMPLETED = "script_generation_completed"
+    SCRIPT_GENERATION_FAILED = "script_generation_failed"
 
 class NotificationData(BaseModel):
     """通知数据基类"""
@@ -176,6 +182,26 @@ class RoomSettingsUpdatedData(NotificationData):
     updated_by_nickname: str
     settings: Dict[str, Any]
 
+class ScriptGenerationStartedData(NotificationData):
+    """剧本生成开始数据"""
+    initiated_by: int
+    initiated_by_nickname: str
+    theme: str
+    difficulty: str
+    ai_dm_personality: str
+    duration_mins: int
+
+class ScriptGenerationCompletedData(NotificationData):
+    """剧本生成完成数据"""
+    script_id: int
+    script_title: str
+    characters: list
+
+class ScriptGenerationFailedData(NotificationData):
+    """剧本生成失败数据"""
+    error_message: str
+    initiated_by: int
+
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
     MessageType.CHAT: ChatData,
@@ -186,6 +212,7 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.PRIVATE_MESSAGE: dict,  # {"recipient_id": int, "message": str}
     MessageType.GAME_VOTE: dict,  # {"vote_type": str, "option": str}
     MessageType.UPDATE_ROOM_SETTINGS: dict,  # {"theme": str, "difficulty": str, "ai_dm_personality": str, "duration_mins": int}
+    MessageType.GENERATE_SCRIPT: dict,  # {"theme": str, "difficulty": str, "ai_dm_personality": str, "duration_mins": int}
 }
 
 # 发出消息类型映射
@@ -208,6 +235,9 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.VOTE_UPDATED: VoteUpdatedData,
     MessageType.CLUE_DISCOVERED: ClueDiscoveredData,
     MessageType.AI_MESSAGE: AIMessageData,
+    MessageType.SCRIPT_GENERATION_STARTED: ScriptGenerationStartedData,
+    MessageType.SCRIPT_GENERATION_COMPLETED: ScriptGenerationCompletedData,
+    MessageType.SCRIPT_GENERATION_FAILED: ScriptGenerationFailedData,
 }
 
 class WebSocketMessage(BaseModel):

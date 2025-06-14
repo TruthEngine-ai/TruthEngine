@@ -24,7 +24,8 @@ class GameHandler:
             MessageType.PLAYER_ACTION.value: self.handle_player_action,
             MessageType.PRIVATE_MESSAGE.value: self.handle_private_message,
             MessageType.GAME_VOTE.value: self.handle_game_vote,
-            MessageType.UPDATE_ROOM_SETTINGS.value: self.handle_update_room_settings
+            MessageType.UPDATE_ROOM_SETTINGS.value: self.handle_update_room_settings,
+            MessageType.GENERATE_SCRIPT.value: self.handle_generate_script
         }
         
         handler = handlers.get(message_type)
@@ -53,7 +54,7 @@ class GameHandler:
             # 广播消息给房间内所有用户
             await manager.broadcast_to_room(room_code, create_message(MessageType.CHAT, {
                 "user_id": user_id,
-                "nickname": player.user.nickname,
+                "nickname": player.character.name+f"({player.user.nickname})" if player.character else  player.user.nickname,
                 "message": data.get("message", ""),
                 "timestamp": datetime.now().isoformat()
             }))
@@ -110,7 +111,8 @@ class GameHandler:
         """处理准备状态"""
         try:
             room = await GameRooms.get(room_code=room_code)
-            player = await GamePlayers.get(room=room, user_id=user_id)
+            
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
             
             player.is_ready = data.get("ready", False)
             await player.save()
@@ -118,6 +120,7 @@ class GameHandler:
             # 通知房间内所有用户
             await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_READY, {
                 "user_id": user_id,
+                "nickname": player.user.nickname,
                 "ready": player.is_ready
             }))
             
@@ -305,6 +308,126 @@ class GameHandler:
                 create_error_message("房间或用户不存在"), 
                 user_id
             )
+
+    async def handle_generate_script(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理剧本生成请求"""
+        try:
+            room = await GameRooms.get(room_code=room_code)
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
+            
+            # 检查是否是房主
+            if room.host_user_id != user_id:
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以生成剧本"), 
+                    user_id
+                )
+                return
+            
+            # 检查房间状态
+            if room.status != '等待中':
+                await manager.send_personal_message(
+                    create_error_message("只能在等待中状态生成剧本"), 
+                    user_id
+                )
+                return
+            
+            # 检查是否已有剧本
+            if room.script_id:
+                await manager.send_personal_message(
+                    create_error_message("房间已有剧本，无法重复生成"), 
+                    user_id
+                )
+                return
+            
+            # 验证数据
+            required_fields = ['theme', 'difficulty', 'ai_dm_personality', 'duration_mins']
+            for field in required_fields:
+                if field not in data:
+                    await manager.send_personal_message(
+                        create_error_message(f"缺少必要参数: {field}"), 
+                        user_id
+                    )
+                    return
+            
+            # 通知房间内所有用户剧本生成开始
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED, {
+                "initiated_by": user_id,
+                "initiated_by_nickname": player.user.nickname,
+                "theme": data["theme"],
+                "difficulty": data["difficulty"],
+                "ai_dm_personality": data["ai_dm_personality"],
+                "duration_mins": data["duration_mins"]
+            }))
+            
+            # 异步调用剧本生成API
+            import asyncio
+            asyncio.create_task(self._generate_script_async(room_code, user_id, data))
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
+
+    async def _generate_script_async(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """异步生成剧本"""
+        try:
+            # 导入剧本生成相关模块
+            from api.scripts_api import call_ai_api, parse_and_save_script, create_user_prompt
+            
+            # 获取房间信息
+            room = await GameRooms.get(room_code=room_code)
+            
+            # 创建用户提示词
+            user_prompt = create_user_prompt(
+                data["theme"],
+                room.max_players,
+                data["difficulty"],
+                data["ai_dm_personality"],
+                data["duration_mins"]
+            )
+            
+            # 调用 AI 接口生成剧本
+            ai_response = await call_ai_api(user_prompt)
+            
+            # 解析并保存到数据库
+            script_id = await parse_and_save_script(ai_response, user_id, room.max_players, data["duration_mins"])
+            
+            # 将剧本关联到房间
+            room.script_id = script_id
+            await room.save()
+            
+            # 获取生成的剧本信息
+            from model.entity.Scripts import Scripts
+            script = await Scripts.get(id=script_id).prefetch_related('characters')
+            
+            # 构建角色信息列表
+            characters = []
+            for character in script.characters:
+                characters.append({
+                    "id": character.id,
+                    "name": character.name,
+                    "gender": character.gender,
+                    "public_info": character.public_info
+                })
+            
+            # 通知房间内所有用户剧本生成完成
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED, {
+                "script_id": script.id,
+                "script_title": script.title,
+                "characters": characters
+            }))
+            
+            # 广播房间状态更新
+            from .websocket_routes import broadcast_room_status
+            await broadcast_room_status(room_code)
+            
+        except Exception as e:
+            # 通知房间内所有用户剧本生成失败
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED, {
+                "error_message": str(e),
+                "initiated_by": user_id
+            }))
 
 # 全局游戏处理器实例
 game_handler = GameHandler()

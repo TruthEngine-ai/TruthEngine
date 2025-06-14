@@ -42,10 +42,13 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         await websocket.close(code=4004, reason="房间不存在或用户不在房间中")
         return
     
-    # 建立连接
-    await manager.connect(websocket, room_code, user.id)
+    # 先接受连接
+    await websocket.accept()
     
     try:
+        # 建立连接管理
+        await manager.register_connection(websocket, room_code, user.id)
+        
         # 发送连接成功消息
         await manager.send_personal_message(create_message(MessageType.CONNECTED, {
             "room_code": room_code,
@@ -80,6 +83,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
                 )
                 
     except WebSocketDisconnect:
+        await manager.disconnect(user.id)
+    except Exception as e:
+        print(f"WebSocket连接异常: {str(e)}")
         await manager.disconnect(user.id)
 
 async def send_room_status(room_code: str, user_id: int):
