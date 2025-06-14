@@ -42,8 +42,7 @@ jobs:
       - name: Extract metadata for Docker
         id: meta
         run: |
-          # echo "DOCKER_TAGS=ghcr.io/${REPO_LC}:dev" >> $GITHUB_ENV
-          echo ""DOCKER_TAGS=${secrets.REGISTRY}/truth_engine/truth_engine:dev" >> $GITHUB_ENV
+          echo "DOCKER_TAGS=${secrets.REGISTRY}/truth_engine/truth_engine:dev" >> $GITHUB_ENV
       
       # 构建并推送Docker镜像
       - name: Build and push Docker image
