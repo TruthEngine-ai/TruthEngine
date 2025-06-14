@@ -6,9 +6,7 @@ from tortoise.exceptions import DoesNotExist
 from model.entity.Scripts import GameRooms, GamePlayers, GameLogs, ScriptCharacters
 from .connection_manager import manager
 from .notification_types import (
-    MessageType, create_message, create_error_message,
-    ChatData, PlayerActionData, CharacterSelectedData,
-    PlayerReadyData, AllReadyData, GameStartedData, PrivateMessageData
+    MessageType, create_message, create_error_message, create_formatted_data
 )
 
 class GameHandler:
@@ -52,12 +50,14 @@ class GameHandler:
             )
             
             # 广播消息给房间内所有用户
-            await manager.broadcast_to_room(room_code, create_message(MessageType.CHAT, {
-                "user_id": user_id,
-                "nickname": player.character.name+f"({player.user.nickname})" if player.character else  player.user.nickname,
-                "message": data.get("message", ""),
-                "timestamp": datetime.now().isoformat()
-            }))
+            nickname = player.character.name+f"({player.user.nickname})" if player.character else player.user.nickname
+            await manager.broadcast_to_room(room_code, create_message(MessageType.CHAT,
+                create_formatted_data(
+                    message=data.get("message", ""),
+                    send_id=user_id,
+                    send_nickname=nickname
+                )
+            ))
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -91,11 +91,13 @@ class GameHandler:
                 await player.save()
                 
                 # 通知房间内所有用户
-                await manager.broadcast_to_room(room_code, create_message(MessageType.CHARACTER_SELECTED, {
-                    "user_id": user_id,
-                    "character_id": character_id,
-                    "character_name": character.name
-                }))
+                await manager.broadcast_to_room(room_code, create_message(MessageType.CHARACTER_SELECTED,
+                    create_formatted_data(
+                        message=f"玩家选择了角色：{character.name}",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
                 
                 # 广播房间状态更新
                 from .websocket_routes import broadcast_room_status
@@ -111,18 +113,20 @@ class GameHandler:
         """处理准备状态"""
         try:
             room = await GameRooms.get(room_code=room_code)
-            
             player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
             
             player.is_ready = data.get("ready", False)
             await player.save()
             
             # 通知房间内所有用户
-            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_READY, {
-                "user_id": user_id,
-                "nickname": player.user.nickname,
-                "ready": player.is_ready
-            }))
+            ready_status = "准备就绪" if player.is_ready else "取消准备"
+            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_READY,
+                create_formatted_data(
+                    message=f"{player.user.nickname} {ready_status}",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
             
             # 广播房间状态更新
             from .websocket_routes import broadcast_room_status
@@ -133,9 +137,13 @@ class GameHandler:
             all_ready = all(p.is_ready and p.character for p in all_players)
             
             if all_ready and len(all_players) >= room.script.player_count_min:
-                await manager.broadcast_to_room(room_code, create_message(MessageType.ALL_READY, {
-                    "can_start": True
-                }))
+                await manager.broadcast_to_room(room_code, create_message(MessageType.ALL_READY,
+                    create_formatted_data(
+                        message="所有玩家已准备就绪，可以开始游戏！",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -177,11 +185,13 @@ class GameHandler:
             await room.save()
             
             # 通知所有玩家游戏开始
-            await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_STARTED, {
-                "stage_name": first_stage.name if first_stage else "游戏开始",
-                "stage_narrative": first_stage.opening_narrative if first_stage else "",
-                "current_stage_number": first_stage.stage_number if first_stage else 1
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_STARTED,
+                create_formatted_data(
+                    message=f"游戏开始！当前阶段：{first_stage.name if first_stage else '游戏开始'}",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -195,7 +205,7 @@ class GameHandler:
             room = await GameRooms.get(room_code=room_code)
             sender = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
             recipient_id = data.get("recipient_id")
-            recipient = await GamePlayers.get(room=room, user_id=recipient_id)
+            recipient = await GamePlayers.get(room=room, user_id=recipient_id).prefetch_related('user')
             
             # 保存私聊记录
             await GameLogs.create(
@@ -207,13 +217,15 @@ class GameHandler:
             )
             
             # 发送给接收者
-            await manager.send_personal_message(create_message(MessageType.PRIVATE_MESSAGE, {
-                "sender_id": user_id,
-                "sender_nickname": sender.user.nickname,
-                "recipient_id": recipient_id,
-                "message": data.get("message", ""),
-                "timestamp": datetime.now().isoformat()
-            }), recipient_id)
+            await manager.send_personal_message(create_message(MessageType.PRIVATE_MESSAGE,
+                create_formatted_data(
+                    message=data.get("message", ""),
+                    send_id=user_id,
+                    send_nickname=sender.user.nickname,
+                    recipient_id=recipient_id,
+                    recipient_nickname=recipient.user.nickname
+                )
+            ), recipient_id)
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -236,12 +248,13 @@ class GameHandler:
             )
             
             # 广播行动给房间内所有用户
-            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_ACTION, {
-                "user_id": user_id,
-                "nickname": player.user.nickname,
-                "action": data.get("action", ""),
-                "timestamp": datetime.now().isoformat()
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_ACTION,
+                create_formatted_data(
+                    message=f"{player.user.nickname} 执行了行动：{data.get('action', '')}",
+                    send_id=user_id,
+                    send_nickname=player.user.nickname
+                )
+            ))
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -293,11 +306,13 @@ class GameHandler:
             await room.save()
             
             # 广播设置更新给房间内所有用户
-            await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED, {
-                "updated_by": user_id,
-                "updated_by_nickname": player.user.nickname,
-                "settings": current_settings
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED,
+                create_formatted_data(
+                    message=f"{player.user.nickname} 更新了房间设置",
+                    send_id=user_id,
+                    send_nickname=player.user.nickname
+                )
+            ))
             
             # 广播房间状态更新
             from .websocket_routes import broadcast_room_status
@@ -350,14 +365,13 @@ class GameHandler:
                     return
             
             # 通知房间内所有用户剧本生成开始
-            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED, {
-                "initiated_by": user_id,
-                "initiated_by_nickname": player.user.nickname,
-                "theme": data["theme"],
-                "difficulty": data["difficulty"],
-                "ai_dm_personality": data["ai_dm_personality"],
-                "duration_mins": data["duration_mins"]
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED,
+                create_formatted_data(
+                    message=f"{player.user.nickname} 开始生成剧本...",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
             
             # 异步调用剧本生成API
             import asyncio
@@ -401,22 +415,14 @@ class GameHandler:
             from model.entity.Scripts import Scripts
             script = await Scripts.get(id=script_id).prefetch_related('characters')
             
-            # 构建角色信息列表
-            characters = []
-            for character in script.characters:
-                characters.append({
-                    "id": character.id,
-                    "name": character.name,
-                    "gender": character.gender,
-                    "public_info": character.public_info
-                })
-            
             # 通知房间内所有用户剧本生成完成
-            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED, {
-                "script_id": script.id,
-                "script_title": script.title,
-                "characters": characters
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED,
+                create_formatted_data(
+                    message=f"剧本生成完成：{script.title}",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
             
             # 广播房间状态更新
             from .websocket_routes import broadcast_room_status
@@ -424,10 +430,13 @@ class GameHandler:
             
         except Exception as e:
             # 通知房间内所有用户剧本生成失败
-            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED, {
-                "error_message": str(e),
-                "initiated_by": user_id
-            }))
+            await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
+                create_formatted_data(
+                    message=f"剧本生成失败：{str(e)}",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
 
 # 全局游戏处理器实例
 game_handler = GameHandler()

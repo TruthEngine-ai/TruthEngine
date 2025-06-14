@@ -21,7 +21,7 @@ from model.dto.RoomDto import (
 from .auth_api import get_current_user
 from models.database import User as UserModel
 from websocket.connection_manager import manager
-from websocket.notification_types import MessageType, create_message
+from websocket.notification_types import MessageType, create_message, create_formatted_data
 
 router = APIRouter(prefix="/api/room", tags=["房间管理"])
 
@@ -155,11 +155,13 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
         )
         
         # 通过WebSocket通知房间内其他用户
-        await manager.broadcast_to_room(request.room_code, create_message(MessageType.PLAYER_JOINED, {
-            "user_id": current_user.id,
-            "nickname": current_user.nickname,
-            "avatar_url": current_user.avatar_url
-        }), exclude_user=current_user.id)
+        await manager.broadcast_to_room(request.room_code, create_message(MessageType.PLAYER_JOINED,
+            create_formatted_data(
+                message=f"{current_user.nickname} 加入了房间",
+                send_id=None,
+                send_nickname="系统"
+            )
+        ), exclude_user=current_user.id)
         
         return ApiResponse(
             code=200,
@@ -210,12 +212,13 @@ async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(
                 await room.save()
                 
                 # 通知房间内用户房主转移
-                await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT, {
-                    "user_id": current_user.id,
-                    "nickname": current_user.nickname,
-                    "is_host_transfer": True,
-                    "new_host_id": new_host.id
-                }))
+                await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT,
+                    create_formatted_data(
+                        message=f"{current_user.nickname} 离开了房间，房主已转移",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
                 
                 # 广播房间状态更新
                 from websocket.websocket_routes import broadcast_room_status
@@ -437,11 +440,13 @@ async def update_room_settings(
         await broadcast_room_status(room_code)
         
         # 通过WebSocket通知房间内所有用户设置已更新
-        await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED, {
-            "updated_by": current_user.id,
-            "updated_by_nickname": current_user.nickname,
-            "settings": current_settings
-        }))
+        await manager.broadcast_to_room(room_code, create_message(MessageType.ROOM_SETTINGS_UPDATED,
+            create_formatted_data(
+                message=f"{current_user.nickname} 更新了房间设置",
+                send_id=current_user.id,
+                send_nickname=current_user.nickname
+            )
+        ))
         
         return ApiResponse(
             code=200,

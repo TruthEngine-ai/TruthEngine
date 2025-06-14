@@ -3,7 +3,7 @@ from fastapi import WebSocket
 import json
 import asyncio
 from datetime import datetime
-from .notification_types import MessageType, create_message
+from .notification_types import MessageType, create_message, create_formatted_data
 from model.entity.Scripts import Users as UserModel
 
 class ConnectionManager:
@@ -23,16 +23,13 @@ class ConnectionManager:
         self.user_rooms[user_id] = room_code
         
         # 通知房间内其他用户有新用户加入
-        await self.broadcast_to_room(room_code, {
-            "type": MessageType.PLAYER_JOINED,
-            "user_id": user_id,
-            "nickname": user.nickname,
-            "data": {
-                "user_id": user_id,
-                "nickname": user.nickname
-            },
-            "timestamp": datetime.now().isoformat()
-        }, exclude_user=user_id)
+        await self.broadcast_to_room(room_code, create_message(MessageType.PLAYER_JOINED, 
+            create_formatted_data(
+                message=f"{user.nickname} 加入了房间",
+                send_id=None,
+                send_nickname="系统"
+            )
+        ), exclude_user=user_id)
         
         # 广播房间状态更新
         await self._broadcast_room_status_after_delay(room_code)
@@ -54,12 +51,15 @@ class ConnectionManager:
                 if not self.room_connections[room_code]:
                     del self.room_connections[room_code]
                 else:
+                    user = await UserModel.filter(id=user_id, is_active=True).first()
                     # 通知房间内其他用户有用户离开
-                    await self.broadcast_to_room(room_code, {
-                        "type": MessageType.PLAYER_LEFT,
-                        "user_id": user_id,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await self.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT,
+                        create_formatted_data(
+                            message=f"用户 {user.nickname} 离开了房间",
+                            send_id=None,
+                            send_nickname="系统"
+                        )
+                    ))
                     
                     # 广播房间状态更新
                     await self._broadcast_room_status_after_delay(room_code)

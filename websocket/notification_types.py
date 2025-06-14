@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class MessageType(str, Enum):
     """消息类型枚举"""
@@ -57,208 +57,139 @@ class MessageType(str, Enum):
     # 房间设置相关
     UPDATE_ROOM_SETTINGS = "update_room_settings"
     
+    
+    # 游戏状态相关
+    GAME_STATUS = "game_status"
+    
     # 剧本生成相关
     GENERATE_SCRIPT = "generate_script"
     SCRIPT_GENERATION_STARTED = "script_generation_started"
     SCRIPT_GENERATION_COMPLETED = "script_generation_completed"
     SCRIPT_GENERATION_FAILED = "script_generation_failed"
 
-class NotificationData(BaseModel):
-    """通知数据基类"""
-    pass
+# 接收消息数据模型
+class ChatMessageData(BaseModel):
+    """聊天消息数据"""
+    message: str = Field(..., min_length=1, max_length=1000)
 
-class ConnectionData(NotificationData):
-    """连接通知数据"""
-    room_code: str
-    user_id: int
-    nickname: str
+class SelectCharacterData(BaseModel):
+    """选择角色数据"""
+    character_id: int = Field(..., gt=0)
 
-class ErrorData(NotificationData):
-    """错误通知数据"""
-    message: str
-    code: Optional[str] = None
-
-class RoomStatusData(NotificationData):
-    """房间状态数据"""
-    room: Dict[str, Any]
-    script: Optional[Dict[str, Any]]
-    players: list
-    characters: list
-
-class PlayerJoinedData(NotificationData):
-    """玩家加入数据"""
-    user_id: int
-    nickname: str
-    avatar_url: Optional[str] = None
-
-class PlayerLeftData(NotificationData):
-    """玩家离开数据"""
-    user_id: int
-    nickname: str
-    is_host_transfer: bool = False
-    new_host_id: Optional[int] = None
-
-class ChatData(NotificationData):
-    """聊天数据"""
-    user_id: int
-    nickname: str
-    message: str
-    timestamp: str
-
-class PrivateMessageData(NotificationData):
-    """私聊数据"""
-    sender_id: int
-    sender_nickname: str
-    recipient_id: int
-    message: str
-    timestamp: str
-
-class CharacterSelectedData(NotificationData):
-    """角色选择数据"""
-    user_id: int
-    character_id: int
-    character_name: str
-
-class PlayerReadyData(NotificationData):
-    """玩家准备数据"""
-    user_id: int
+class ReadyData(BaseModel):
+    """准备状态数据"""
     ready: bool
 
-class AllReadyData(NotificationData):
-    """全部准备数据"""
-    can_start: bool
+class StartGameData(BaseModel):
+    """开始游戏数据"""
+    pass
 
-class GameStartedData(NotificationData):
-    """游戏开始数据"""
-    stage_name: str
-    stage_narrative: str
-    current_stage_number: int
-
-class StageChangedData(NotificationData):
-    """阶段变更数据"""
-    stage_number: int
-    stage_name: str
-    stage_narrative: str
-    stage_goal: str
-
-class PlayerActionData(NotificationData):
+class PlayerActionData(BaseModel):
     """玩家行动数据"""
-    user_id: int
-    nickname: str
-    action: str
-    timestamp: str
+    action: str = Field(..., min_length=1, max_length=500)
 
-class VoteStartedData(NotificationData):
-    """投票开始数据"""
-    vote_type: str
-    vote_title: str
-    options: list
-    duration: int
+class PrivateMessageData(BaseModel):
+    """私聊消息数据"""
+    recipient_id: int = Field(..., gt=0)
+    message: str = Field(..., min_length=1, max_length=1000)
 
-class VoteUpdatedData(NotificationData):
-    """投票更新数据"""
-    vote_id: str
-    user_id: int
-    option: str
-    current_votes: Dict[str, int]
+class GameVoteData(BaseModel):
+    """游戏投票数据"""
+    vote_type: str = Field(..., min_length=1)
+    option: str = Field(..., min_length=1)
 
-class ClueDiscoveredData(NotificationData):
-    """线索发现数据"""
-    clue_id: int
-    clue_name: str
-    clue_description: str
-    discoverer_id: int
-    location: str
+class UpdateRoomSettingsData(BaseModel):
+    """更新房间设置数据"""
+    theme: Optional[str] = Field(None, max_length=100)
+    difficulty: Optional[str] = Field(None)
+    ai_dm_personality: Optional[str] = Field(None, max_length=100)
+    duration_mins: Optional[int] = Field(None, gt=0, le=480)
 
-class AIMessageData(NotificationData):
-    """AI消息数据"""
-    message: str
-    message_type: str
-    target_user_id: Optional[int] = None  # None表示广播
-
-class RoomSettingsUpdatedData(NotificationData):
-    """房间设置更新数据"""
-    updated_by: int
-    updated_by_nickname: str
-    settings: Dict[str, Any]
-
-class ScriptGenerationStartedData(NotificationData):
-    """剧本生成开始数据"""
-    initiated_by: int
-    initiated_by_nickname: str
-    theme: str
-    difficulty: str
-    ai_dm_personality: str
-    duration_mins: int
-
-class ScriptGenerationCompletedData(NotificationData):
-    """剧本生成完成数据"""
-    script_id: int
-    script_title: str
-    characters: list
-
-class ScriptGenerationFailedData(NotificationData):
-    """剧本生成失败数据"""
-    error_message: str
-    initiated_by: int
+class GenerateScriptData(BaseModel):
+    """生成剧本数据"""
+    theme: str = Field(..., min_length=1, max_length=100)
+    difficulty: str 
+    ai_dm_personality: str = Field(..., min_length=1, max_length=100)
+    duration_mins: int = Field(..., gt=0, le=480)
 
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
-    MessageType.CHAT: ChatData,
-    MessageType.SELECT_CHARACTER: dict,  # {"character_id": int}
-    MessageType.READY: dict,  # {"ready": bool}
-    MessageType.START_GAME: dict,  # {}
-    MessageType.PLAYER_ACTION: dict,  # {"action": str}
-    MessageType.PRIVATE_MESSAGE: dict,  # {"recipient_id": int, "message": str}
-    MessageType.GAME_VOTE: dict,  # {"vote_type": str, "option": str}
-    MessageType.UPDATE_ROOM_SETTINGS: dict,  # {"theme": str, "difficulty": str, "ai_dm_personality": str, "duration_mins": int}
-    MessageType.GENERATE_SCRIPT: dict,  # {"theme": str, "difficulty": str, "ai_dm_personality": str, "duration_mins": int}
-}
-
-# 发出消息类型映射
-OUTGOING_MESSAGE_TYPES = {
-    MessageType.CONNECTED: ConnectionData,
-    MessageType.ERROR: ErrorData,
-    MessageType.ROOM_STATUS: RoomStatusData,
-    MessageType.ROOM_SETTINGS_UPDATED: RoomSettingsUpdatedData,
-    MessageType.PLAYER_JOINED: PlayerJoinedData,
-    MessageType.PLAYER_LEFT: PlayerLeftData,
-    MessageType.CHAT: ChatData,
-    MessageType.PRIVATE_MESSAGE: PrivateMessageData,
-    MessageType.CHARACTER_SELECTED: CharacterSelectedData,
-    MessageType.PLAYER_READY: PlayerReadyData,
-    MessageType.ALL_READY: AllReadyData,
-    MessageType.GAME_STARTED: GameStartedData,
-    MessageType.STAGE_CHANGED: StageChangedData,
+    MessageType.CHAT: ChatMessageData,
+    MessageType.SELECT_CHARACTER: SelectCharacterData,
+    MessageType.READY: ReadyData,
+    MessageType.START_GAME: StartGameData,
     MessageType.PLAYER_ACTION: PlayerActionData,
-    MessageType.VOTE_STARTED: VoteStartedData,
-    MessageType.VOTE_UPDATED: VoteUpdatedData,
-    MessageType.CLUE_DISCOVERED: ClueDiscoveredData,
-    MessageType.AI_MESSAGE: AIMessageData,
-    MessageType.SCRIPT_GENERATION_STARTED: ScriptGenerationStartedData,
-    MessageType.SCRIPT_GENERATION_COMPLETED: ScriptGenerationCompletedData,
-    MessageType.SCRIPT_GENERATION_FAILED: ScriptGenerationFailedData,
+    MessageType.PRIVATE_MESSAGE: PrivateMessageData,
+    MessageType.GAME_VOTE: GameVoteData,
+    MessageType.UPDATE_ROOM_SETTINGS: UpdateRoomSettingsData,
+    MessageType.GENERATE_SCRIPT: GenerateScriptData,
 }
 
-class WebSocketMessage(BaseModel):
-    """WebSocket消息统一格式"""
-    type: str
-    data: Optional[Dict[str, Any]] = None
-    timestamp: Optional[str] = None
+# 发出消息类型映射 - 使用标准格式
+OUTGOING_MESSAGE_TYPES = {
+    MessageType.CONNECTED: dict,
+    MessageType.ERROR: dict,
+    MessageType.ROOM_STATUS: dict,
+    MessageType.GAME_STATUS: dict,
+    MessageType.ROOM_SETTINGS_UPDATED: dict,
+    MessageType.PLAYER_JOINED: dict,
+    MessageType.PLAYER_LEFT: dict,
+    MessageType.CHAT: dict,
+    MessageType.PRIVATE_MESSAGE: dict,
+    MessageType.CHARACTER_SELECTED: dict,
+    MessageType.PLAYER_READY: dict,
+    MessageType.ALL_READY: dict,
+    MessageType.GAME_STARTED: dict,
+    MessageType.STAGE_CHANGED: dict,
+    MessageType.PLAYER_ACTION: dict,
+    MessageType.VOTE_STARTED: dict,
+    MessageType.VOTE_UPDATED: dict,
+    MessageType.CLUE_DISCOVERED: dict,
+    MessageType.AI_MESSAGE: dict,
+    MessageType.SCRIPT_GENERATION_STARTED: dict,
+    MessageType.SCRIPT_GENERATION_COMPLETED: dict,
+    MessageType.SCRIPT_GENERATION_FAILED: dict,
+}
 
 def create_message(message_type: MessageType, data: Any = None) -> Dict[str, Any]:
     """创建标准WebSocket消息"""
     from datetime import datetime
     
+    # 对于状态类消息，保持原有data结构
+    if message_type in [MessageType.ROOM_STATUS, MessageType.GAME_STATUS]:
+        return {
+            "type": message_type.value,
+            "data": data
+        }
+    
+    # 其他消息类型使用统一格式（data已经被预格式化）
     message = {
         "type": message_type.value,
-        "timestamp": datetime.now().isoformat()
+        "data": data if data else {
+            "message": "",
+            "datetime": datetime.now().isoformat(),
+            "send_id": None,
+            "send_nickname": "",
+            "recipient_id": None,
+            "recipient_nickname": ""
+        }
     }
     
-    if data is not None:
-        message["data"] = data
-    
     return message
+
+def create_formatted_data(message: str, send_id: Optional[int] = None, send_nickname: str = "", 
+                         recipient_id: Optional[int] = None, recipient_nickname: str = "") -> Dict[str, Any]:
+    """创建格式化的消息数据"""
+    from datetime import datetime
+    
+    return {
+        "message": message,
+        "datetime": datetime.now().isoformat(),
+        "send_id": send_id,
+        "send_nickname": send_nickname,
+        "recipient_id": recipient_id,
+        "recipient_nickname": recipient_nickname
+    }
 
 def create_error_message(error_msg: str, error_code: Optional[str] = None) -> Dict[str, Any]:
     """创建错误消息"""
@@ -272,26 +203,33 @@ def create_success_message(message_type: MessageType, data: Any) -> Dict[str, An
     return create_message(message_type, data)
 
 # 消息验证函数
-def validate_incoming_message(message_type: str, data: Dict[str, Any]) -> bool:
+def validate_incoming_message(message_type: str, data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
     """验证接收到的消息格式"""
     try:
         msg_type = MessageType(message_type)
-        if msg_type in INCOMING_MESSAGE_TYPES:
-            return True
-        return False
+        if msg_type not in INCOMING_MESSAGE_TYPES:
+            return False, f"不支持的消息类型: {message_type}"
+        
+        data_class = INCOMING_MESSAGE_TYPES[msg_type]
+        try:
+            # 使用pydantic进行数据验证
+            data_class.parse_obj(data)
+            return True, None
+        except Exception as e:
+            return False, f"数据格式错误: {str(e)}"
+            
     except ValueError:
-        return False
+        return False, f"无效的消息类型: {message_type}"
 
-def validate_outgoing_message(message_type: MessageType, data: Any) -> bool:
-    """验证发出消息格式"""
+def parse_incoming_message(message_type: str, data: Dict[str, Any]) -> Any:
+    """解析并验证接收到的消息数据"""
     try:
-        if message_type in OUTGOING_MESSAGE_TYPES:
-            data_class = OUTGOING_MESSAGE_TYPES[message_type]
-            if data_class == dict:
-                return isinstance(data, dict)
-            else:
-                # 对于有具体数据类的，可以进行更严格的验证
-                return True
-        return False
+        msg_type = MessageType(message_type)
+        if msg_type in INCOMING_MESSAGE_TYPES:
+            data_class = INCOMING_MESSAGE_TYPES[msg_type]
+            return data_class.parse_obj(data)
+        return None
     except Exception:
-        return False
+        return None
+
+

@@ -8,7 +8,7 @@ from api.auth_api import get_current_user
 from model.entity.Scripts import GameRooms, GamePlayers
 from models.database import User as UserModel
 from utils.auth_util import decode_token
-from .notification_types import MessageType, create_message, create_error_message, validate_incoming_message
+from .notification_types import MessageType, create_message, create_error_message, validate_incoming_message, parse_incoming_message, create_formatted_data
 
 router = APIRouter()
 
@@ -50,11 +50,13 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         await manager.register_connection(websocket, room_code, user.id)
         
         # 发送连接成功消息
-        await manager.send_personal_message(create_message(MessageType.CONNECTED, {
-            "room_code": room_code,
-            "user_id": user.id,
-            "nickname": user.nickname
-        }), user.id)
+        await manager.send_personal_message(create_message(MessageType.CONNECTED,
+            create_formatted_data(
+                message=f"欢迎 {user.nickname} 进入房间",
+                send_id=None,
+                send_nickname="系统"
+            )
+        ), user.id)
         
         # 发送当前房间状态
         await send_room_status(room_code, user.id)
@@ -67,14 +69,35 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
                 
                 # 验证消息格式
                 message_type = message.get("type")
-                if not validate_incoming_message(message_type, message.get("data", {})):
+                message_data = message.get("data", {})
+                
+                is_valid, error_msg = validate_incoming_message(message_type, message_data)
+                if not is_valid:
                     await manager.send_personal_message(
-                        create_error_message("无效的消息格式"),
+                        create_error_message(error_msg),
                         user.id
                     )
                     continue
                 
-                await game_handler.handle_message(websocket, room_code, user.id, message)
+                # 解析消息数据
+                parsed_data = parse_incoming_message(message_type, message_data)
+                if parsed_data is None:
+                    await manager.send_personal_message(
+                        create_error_message("消息解析失败"),
+                        user.id
+                    )
+                    continue
+                
+                # 将解析后的数据转换为字典传递给处理器
+                await game_handler.handle_message(
+                    websocket, 
+                    room_code, 
+                    user.id, 
+                    {
+                        "type": message_type,
+                        "data": parsed_data.dict() if hasattr(parsed_data, 'dict') else {}
+                    }
+                )
                 
             except json.JSONDecodeError:
                 await manager.send_personal_message(
