@@ -20,11 +20,11 @@ interface RoomInfoCardProps {
     players: Player[];
     isHost: boolean;
     isCurrentUserReady: boolean;
-    canStartGame: boolean;
+    canGenerateScript: boolean;
     isConnected: boolean;
     isGameSettingsComplete: boolean;
     onToggleReady: () => void;
-    onStartGame: () => void;
+    onGenerateScript: () => void;
     onLeaveRoom: () => void;
 }
 
@@ -33,17 +33,17 @@ const RoomInfoCard: React.FC<RoomInfoCardProps> = ({
     players,
     isHost,
     isCurrentUserReady,
-    canStartGame,
+    canGenerateScript,
     isConnected,
     isGameSettingsComplete,
     onToggleReady,
-    onStartGame,
+    onGenerateScript,
     onLeaveRoom
 }) => {
     const { token } = theme.useToken();
 
     const handleCopyInviteLink = () => {
-        const inviteLink = `${window.location.origin}/join-room?room_code=${room.code}`;
+        const inviteLink = `${window.location.origin}/game?room_code=${room.code}`;
         navigator.clipboard.writeText(inviteLink).then(() => {
             message.success('邀请链接已复制到剪贴板');
         }).catch(() => {
@@ -177,22 +177,22 @@ const RoomInfoCard: React.FC<RoomInfoCardProps> = ({
                     </Button>
                 )}
 
-                {/* 开始游戏按钮 - 只有房主可见 */}
+                {/* 生成剧本按钮 - 只有房主可见 */}
                 {isHost && (
                     <>
                         <Button
                             type="primary"
                             size="large"
                             icon={<PlayCircleOutlined />}
-                            disabled={!canStartGame}
-                            onClick={onStartGame}
+                            disabled={!canGenerateScript}
+                            onClick={onGenerateScript}
                             style={{
                                 borderRadius: 8,
                                 fontWeight: 600,
-                                boxShadow: canStartGame ? '0 4px 12px rgba(22, 119, 255, 0.3)' : 'none',
+                                boxShadow: canGenerateScript ? '0 4px 12px rgba(22, 119, 255, 0.3)' : 'none',
                             }}
                         >
-                            开始游戏
+                            生成剧本
                         </Button>
                         {!isGameSettingsComplete && (
                             <Text type="secondary" style={{ fontSize: '12px', textAlign: 'center' }}>

@@ -195,6 +195,11 @@ export class GameWebSocket {
         this.send('update_room_settings', settings);
     }
 
+    // 生成剧本
+    generateScript(): void {
+        this.send('generate_script', null);
+    }
+
     // 添加事件监听器
     on(event: string, listener: EventListener): void {
         if (!this.listeners.has(event)) {
@@ -234,52 +239,8 @@ export class GameWebSocket {
     // 处理接收到的消息
     private handleMessage(message: WebSocketMessage): void {
         const { type, data } = message;
+        this.emit(type, data);
 
-        // 根据消息类型触发对应事件
-        switch (type) {
-            case 'connected':
-                this.emit('connected', data);
-                break;
-            case 'room_status':
-                this.emit('room_status', data as RoomStatus);
-                break;
-            case 'chat':
-                this.emit('chat', data);
-                break;
-            case 'character_selected':
-                this.emit('character_selected', data);
-                break;
-            case 'player_ready':
-                this.emit('player_ready', data);
-                break;
-            case 'all_ready':
-                this.emit('all_ready', data);
-                break;
-            case 'game_started':
-                this.emit('game_started', data);
-                break;
-            case 'private_message':
-                this.emit('private_message', data);
-                break;
-            case 'player_action':
-                this.emit('player_action', data);
-                break;
-            case 'user_joined':
-                this.emit('user_joined', data);
-                break;
-            case 'user_left':
-                this.emit('user_left', data);
-                break;
-            case 'room_settings_updated':
-                this.emit('room_settings_updated', data);
-                break;
-            case 'error':
-                this.emit('error', message);
-                break;
-            default:
-                console.log('未知消息类型:', type);
-                this.emit('unknown_message', message);
-        }
     }
 
     // 安排重连

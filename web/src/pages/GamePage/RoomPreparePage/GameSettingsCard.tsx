@@ -16,7 +16,6 @@ const { Option } = Select;
 interface GameSettingsCardProps {
     form: FormInstance;
     isHost: boolean;
-    generating: boolean;
     initialValues: GameFormValues;
     onFieldsChange: (changedFields: any) => void;
 }

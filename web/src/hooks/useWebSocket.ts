@@ -5,7 +5,7 @@ export interface UseWebSocketReturn {
     ws: GameWebSocket | null;
     isConnected: boolean;
     roomStatus: RoomStatus | null;
-    messages: Array<any>;
+    messages: Array<DisplayedMessage>; // Updated type
     connect: () => Promise<void>;
     disconnect: () => void;
     sendChat: (message: string) => void;
@@ -20,20 +20,42 @@ export interface UseWebSocketReturn {
         ai_dm_personality?: string;
         duration_mins?: number;
     }) => void;
+    generateScript: (settings: {
+        theme?: string;
+        difficulty?: string;
+        ai_dm_personality?: string;
+        duration_mins?: number;
+    }) => void;
+}
+
+export interface MessageContent {
+    message?: string; // Message can be optional if 'action' field is primary
+    datetime: string;
+    send_id?: number | null;
+    send_nickname?: string;
+    recipient_id?: number | null;
+    recipient_nickname?: string;
+    action?: string; // For player_action type messages
+    [key: string]: any; // Allow other properties that might come with the message data
+}
+
+export interface DisplayedMessage extends MessageContent {
+    messageType: string;
 }
 
 export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
     const [isConnected, setIsConnected] = useState(false);
     const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
-    const [messages, setMessages] = useState<Array<any>>([]);
+    const [messages, setMessages] = useState<Array<DisplayedMessage>>([]);
     const wsRef = useRef<GameWebSocket | null>(null);
     const isConnectingRef = useRef(false);
+    const autoConnectEnabled = useRef(false);
 
-    // 使用useCallback确保connect函数引用稳定
     const connect = useCallback(async (): Promise<void> => {
         if (!wsRef.current || isConnectingRef.current) return;
-        
+
         isConnectingRef.current = true;
+        autoConnectEnabled.current = true;
         try {
             await wsRef.current.connect();
         } catch (error) {
@@ -44,11 +66,44 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
     }, []);
 
     const disconnect = useCallback((): void => {
+        autoConnectEnabled.current = false; // 手动断开时禁用自动连接
         if (wsRef.current) {
             wsRef.current.disconnect();
         }
-        // 注意：不要在这里设置wsRef.current = null，让组件卸载时处理
     }, []);
+
+    const processMessageEvent = useCallback((eventName: string, data: any) => {
+        console.log(`处理事件: ${eventName}`, data);
+        let displayedMessage: DisplayedMessage;
+        if (eventName === 'error') {
+            displayedMessage = {
+                message: `错误: ${data.message || String(data)}`,
+                datetime: new Date().toISOString(),
+                send_nickname: '系统',
+                messageType: eventName
+            };
+        } else if (eventName === 'player_action') {
+            const actionData = data as MessageContent; // Assuming data has action and other MessageContent fields
+            displayedMessage = {
+                ...actionData,
+                message: actionData.action, // Use 'action' field as 'message'
+                messageType: eventName
+            };
+        } else {
+            // For other message types, assume data is MessageContent-like
+            const messageData = data as MessageContent;
+            displayedMessage = {
+                ...messageData,
+                messageType: eventName
+            };
+        }
+
+        if (!displayedMessage.datetime) {
+            displayedMessage.datetime = new Date().toISOString();
+        }
+        setMessages(prev => [...prev, displayedMessage]);
+    }, []);
+
 
     useEffect(() => {
         if (!roomCode || roomCode === 'UNKNOWN') return;
@@ -64,10 +119,11 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         const handleDisconnected = () => {
             setIsConnected(false);
             console.log('WebSocket已断开连接');
-            // 连接断开时自动尝试重连
-            if (!isConnectingRef.current) {
+            if (autoConnectEnabled.current && !isConnectingRef.current) {
                 setTimeout(() => {
-                    connect();
+                    if (autoConnectEnabled.current) {
+                        connect();
+                    }
                 }, 2000);
             }
         };
@@ -77,103 +133,63 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
             setRoomStatus(data);
         };
 
-        const handleChat = (data: any) => {
-            setMessages(prev => [...prev, { ...data, messageType: 'chat' }]);
-        };
-
-        const handlePrivateMessage = (data: any) => {
-            setMessages(prev => [...prev, { ...data, messageType: 'private' }]);
-        };
-
-        const handlePlayerAction = (data: any) => {
-            setMessages(prev => [...prev, { ...data, messageType: 'action' }]);
-        };
-
-        // 添加更多会影响房间状态的事件监听
-        const handleCharacterSelected = (data: any) => {
-            console.log('角色选择事件:', data);
-            // 角色选择可能会影响房间状态，触发状态更新
-        };
-
-        const handlePlayerReady = (data: any) => {
-            console.log('玩家准备状态变化:', data);
-            // 玩家准备状态变化可能会影响房间状态
-        };
-
-        const handleAllReady = (data: any) => {
-            console.log('所有玩家已准备:', data);
-            // 所有玩家准备就绪
-        };
-
-        const handleGameStarted = (data: any) => {
-            console.log('游戏已开始:', data);
-            // 游戏开始事件
-        };
-
-        const handleUserJoined = (data: any) => {
-            console.log('用户加入房间:', data);
-            // 用户加入会影响房间状态
-        };
-
-        const handleUserLeft = (data: any) => {
-            console.log('用户离开房间:', data);
-            // 用户离开会影响房间状态
-        };
-
-        const handleRoomSettingsUpdated = (data: any) => {
-            console.log('房间设置已更新:', data);
-            setMessages(prev => [...prev, { 
-                ...data, 
-                messageType: 'system',
-                message: `${data.updated_by_nickname} 更新了房间设置`
-            }]);
-        };
-
-        const handleError = (error: any) => {
-            console.error('WebSocket错误:', error);
-        };
-
-        // 添加事件监听器
+        // 事件监听器
         ws.on('connected', handleConnected);
         ws.on('disconnected', handleDisconnected);
         ws.on('room_status', handleRoomStatus);
-        ws.on('chat', handleChat);
-        ws.on('private_message', handlePrivateMessage);
-        ws.on('player_action', handlePlayerAction);
-        ws.on('character_selected', handleCharacterSelected);
-        ws.on('player_ready', handlePlayerReady);
-        ws.on('all_ready', handleAllReady);
-        ws.on('game_started', handleGameStarted);
-        ws.on('user_joined', handleUserJoined);
-        ws.on('user_left', handleUserLeft);
-        ws.on('room_settings_updated', handleRoomSettingsUpdated);
-        ws.on('error', handleError);
 
-        // 立即尝试连接
-        connect();
+        const messageEventNames = [
+            // 连接相关
+            'connected', 'disconnected', 'error',
+            // 房间状态相关
+            'room_settings_updated', 'player_joined',
+            'player_left', 'room_dissolved',
+            // 聊天相关
+            'chat', 'private_message',
+            // 角色选择相关
+            'character_selected', 'character_deselected',
+            // 准备状态相关
+            'player_ready', 'all_ready',
+            // 游戏流程相关
+            'game_started', 'game_ended', 'stage_changed',
+            // 玩家行动相关
+            'player_action', 'action_result',
+            // 投票相关
+            'vote_started', 'vote_updated', 'vote_ended',
+            // 线索相关
+            'clue_discovered', 'clue_shared',
+            // AI DM相关
+            'ai_message', 'ai_prompt',
+            // 游戏状态相关
+            'game_status',
+            // 剧本生成相关
+            'script_generation_started', 'script_generation_completed', 'script_generation_failed'
+        ];
+        const eventHandlers: { [key: string]: (data: any) => void } = {};
+        messageEventNames.forEach(eventName => {
+            const handler = (data: any) => processMessageEvent(eventName, data);
+            eventHandlers[eventName] = handler;
+            ws.on(eventName, handler);
+        });
 
         // 清理函数
         return () => {
             ws.off('connected', handleConnected);
             ws.off('disconnected', handleDisconnected);
             ws.off('room_status', handleRoomStatus);
-            ws.off('chat', handleChat);
-            ws.off('private_message', handlePrivateMessage);
-            ws.off('player_action', handlePlayerAction);
-            ws.off('character_selected', handleCharacterSelected);
-            ws.off('player_ready', handlePlayerReady);
-            ws.off('all_ready', handleAllReady);
-            ws.off('game_started', handleGameStarted);
-            ws.off('user_joined', handleUserJoined);
-            ws.off('user_left', handleUserLeft);
-            ws.off('room_settings_updated', handleRoomSettingsUpdated);
-            ws.off('error', handleError);
+
+            messageEventNames.forEach(eventName => {
+                if (eventHandlers[eventName]) {
+                    ws.off(eventName, eventHandlers[eventName]);
+                }
+            });
         };
-    }, [roomCode, connect]);
+    }, [roomCode, processMessageEvent, connect]);
 
     // 组件卸载时才真正断开连接
     useEffect(() => {
         return () => {
+            autoConnectEnabled.current = false;
             if (wsRef.current) {
                 wsRef.current.disconnect();
                 wsRef.current = null;
@@ -215,6 +231,10 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         wsRef.current?.updateRoomSettings(settings);
     };
 
+    const generateScript = (): void => {
+        wsRef.current?.generateScript();
+    };
+
     return {
         ws: wsRef.current,
         isConnected,
@@ -229,5 +249,8 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         sendPrivateMessage,
         sendPlayerAction,
         updateRoomSettings,
+        generateScript,
     };
 };
+
+export type { RoomStatus };

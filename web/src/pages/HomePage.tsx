@@ -32,7 +32,7 @@ const getRandomNickname = () => {
 
 const HomePage: React.FC = () => {
     const { token } = theme.useToken();
-    const { isDarkMode } = useThemeContext();
+    useThemeContext();
     const { user, isLoggedIn, logout } = useAuth();
     const navigate = useNavigate();
     const [guestName, setGuestName] = useState<string>('');
@@ -53,7 +53,7 @@ const HomePage: React.FC = () => {
 
     const handleGuestLogin = () => {
         if (guestName.trim()) {
-            navigate('/app/create-room');
+            navigate('/create-room');
         }
     };
 
@@ -72,18 +72,14 @@ const HomePage: React.FC = () => {
     };
 
     const handleEnterGame = () => {
-        navigate('/app/create-room');
+        navigate('/create-room');
     };
 
     const pageStyle: React.CSSProperties = {
-        minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '20px',
-        background: isDarkMode
-            ? `radial-gradient(circle, ${token.colorBgElevated} 0%, ${token.colorBgLayout} 100%)`
-            : `radial-gradient(circle, #ffffff 0%, ${token.colorBgLayout} 100%)`,
     };
 
     const cardStyle: React.CSSProperties = {
