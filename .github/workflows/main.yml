@@ -43,7 +43,7 @@ jobs:
         id: meta
         run: |
           # echo "DOCKER_TAGS=ghcr.io/${REPO_LC}:dev" >> $GITHUB_ENV
-          echo "crpi-lm8x42u79p1fqssy.cn-shanghai.personal.cr.aliyuncs.com/truth_engine/truth_engine:dev"
+          echo ""DOCKER_TAGS=${secrets.REGISTRY}/truth_engine/truth_engine:dev" >> $GITHUB_ENV
       
       # 构建并推送Docker镜像
       - name: Build and push Docker image
