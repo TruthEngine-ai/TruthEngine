@@ -188,7 +188,7 @@ async def read_users_me(
             user_id=current_user.id
         ).prefetch_related('room').order_by('-created_at').first()
         
-        if player and player.room.status not in ['已结束', '已解散']:
+        if player and player.room.status not in ['已解散']:
             current_room = {
                 "room_code": player.room.room_code,
                 "status": player.room.status,

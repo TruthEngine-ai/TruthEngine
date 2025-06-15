@@ -138,9 +138,9 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[Users, Dep
             raise HTTPException(status_code=400, detail="房间密码错误")
         
         # 检查用户是否已在房间中
-        existing_player = await GamePlayers.filter(room=room, user=current_user).first()
-        if existing_player:
-            raise HTTPException(status_code=400, detail="用户已在房间中")
+        # existing_player = await GamePlayers.filter(room=room, user=current_user ).first()
+        # if existing_player:
+        #     raise HTTPException(status_code=400, detail="用户已在房间中")
         
         # 检查房间人数限制
         current_players = await GamePlayers.filter(room=room).count()

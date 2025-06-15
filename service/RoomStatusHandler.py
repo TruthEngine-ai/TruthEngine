@@ -151,12 +151,14 @@ class RoomStatusHandler:
             status_data["story_timeline"] = await self._build_story_timeline_info(room.script, user_id, room)
             status_data["voting_info"] = await self._build_voting_info(room)
             
-        elif room.status in ["已结束", "已解散"]:
+        elif room.status in ["已结束"]:
             # 结束阶段：返回结果信息
             status_data["players"] = await self._build_players_info(room)
-            status_data["characters"] = await self._build_detailed_characters_info(room, user_id)
             status_data["story_timeline"] = await self._build_story_timeline_info(room.script, user_id, room)
-            status_data["game_result"] = await self._build_game_result(room)
+            status_data["characters"] = await self._build_detailed_characters_info(room, user_id)
+            status_data["current_stage"] = await self._build_stage_info(room, user_id)
+            status_data["clues"] = await self._build_clues_info(room, user_id)
+            status_data["solution"] = room.script.solution
         
         return status_data
     
@@ -489,8 +491,10 @@ class RoomStatusHandler:
         vote_details = []
         
         for vote in votes:
-            voted_user_id = vote.voted_game_player.user.id
+            voter_user_id = vote.voter_game_player.user.id
             voter_nickname = vote.voter_game_player.user.nickname
+            
+            voted_user_id = vote.voted_game_player.user.id
             voted_nickname = vote.voted_game_player.user.nickname
             
             if voted_user_id not in vote_counts:
@@ -502,7 +506,9 @@ class RoomStatusHandler:
             
             vote_counts[voted_user_id]["vote_count"] += 1
             vote_details.append({
+                "voter_user_id": voter_user_id,
                 "voter_nickname": voter_nickname,
+                "voted_user_id": voted_user_id,
                 "voted_nickname": voted_nickname,
                 "timestamp": vote.timestamp.isoformat()
             })

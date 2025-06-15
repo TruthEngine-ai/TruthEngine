@@ -683,6 +683,7 @@ class GameHandler:
                 
                 vote_message = f"{voter_player.character.name}({voter_player.user.nickname}) 投票给 {voted_player.character.name}({voted_player.user.nickname})"
             
+                        
             # 广播投票信息给房间内所有用户
             await manager.broadcast_to_room(room_code, create_message(MessageType.VOTE_UPDATED,
                 create_formatted_data(
@@ -692,9 +693,25 @@ class GameHandler:
                 )
             ))
             
+            if await GamePlayers.filter(room=room).count() ==  await GameVotes.filter(room=room).count():
+                # 如果所有玩家都投票了，结束投票阶段
+                room.status = "已结束"
+                await room.save()
+
+                # 通知所有玩家投票结束
+                await manager.broadcast_to_room(room_code, create_message(MessageType.VOTE_ENDED,
+                    create_formatted_data(
+                        message="所有玩家已投票，投票阶段结束。",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
+                
             # 广播房间状态更新（包含最新的投票统计）
             from .RoomStatusHandler import room_status_handler
             await room_status_handler.broadcast_room_status(room_code)
+
+
             
         except DoesNotExist:
             await manager.send_personal_message(
