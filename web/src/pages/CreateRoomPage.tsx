@@ -1,8 +1,9 @@
-import { Card, Form, Input, Button, Typography, theme, Row, Col, List, Spin, message, Select, Modal, Pagination } from 'antd';
-import { UserOutlined, LockOutlined, PlusCircleOutlined, LoginOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, Typography, theme, Row, Col, List, Spin, message, Select, Modal, Pagination, Alert } from 'antd';
+import { UserOutlined, LockOutlined, PlusCircleOutlined, LoginOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
 import React, { useEffect, useState } from 'react';
-import { createRoom, getRoomList, joinRoom, type RoomInfo } from '../api/roomApi';
+import { createRoom, getRoomList, type RoomInfo } from '../api/roomApi';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 
@@ -10,6 +11,7 @@ const CreateRoomPage = () => {
     const { token } = theme.useToken();
     const [form] = Form.useForm();
     const navigate = useNavigate();
+    const { user, refreshUserInfo } = useAuth(); // 获取用户信息
 
     // 房间列表相关状态
     const [rooms, setRooms] = useState<RoomInfo[]>([]);
@@ -24,6 +26,10 @@ const CreateRoomPage = () => {
     const [selectedRoomHasPassword, setSelectedRoomHasPassword] = useState<boolean>(false);
     const [joiningRoom, setJoiningRoom] = useState<boolean>(false);
     const [passwordForm] = Form.useForm();
+
+    // 判断用户是否已在房间中
+    const userInRoom = !!user?.current_room;
+    const currentRoomCode = user?.current_room?.room_code || '';
 
     // 获取房间列表
     const fetchRooms = async (page: number = currentPage, size: number = pageSize) => {
@@ -43,8 +49,6 @@ const CreateRoomPage = () => {
     useEffect(() => {
         fetchRooms();
     }, []);
-
-    // 处理分页变化
     const handlePageChange = (page: number, size?: number) => {
         setCurrentPage(page);
         if (size && size !== pageSize) {
@@ -55,6 +59,10 @@ const CreateRoomPage = () => {
 
     // 创建房间
     const onFinish = async (values: any) => {
+        if (userInRoom) {
+            navigate(`/game?room_code=${currentRoomCode}`);
+            return;
+        }
         try {
             const res = await createRoom({
                 room_password: values.roomPassword,
@@ -62,8 +70,9 @@ const CreateRoomPage = () => {
                 player_count_max: values.roomSize,
             });
             if (res.code === 200) {
+                await refreshUserInfo();
                 message.success('房间创建成功');
-                navigate(`/app/game/ready?room_code=${res.data.room_code}`);
+                navigate(`/game?room_code=${res.data.room_code}`);
             } else {
                 message.error(res.msg || '创建房间失败');
             }
@@ -72,36 +81,35 @@ const CreateRoomPage = () => {
         }
     };
 
+    // 进入当前房间
+    const handleEnterCurrentRoom = () => {
+        if (currentRoomCode) {
+            navigate(`/game?room_code=${currentRoomCode}`);
+        }
+    };
+
     // 处理加入房间
     const handleJoinRoom = (room: RoomInfo) => {
+        // 如果用户已在房间中，直接返回
+        if (userInRoom) {
+            message.warning('您已在房间中，请先退出当前房间');
+            return;
+        }
+
         setSelectedRoomCode(room.room_code);
         setSelectedRoomHasPassword(room.has_password);
         if (room.has_password) {
             setJoinModalVisible(true);
         } else {
-            handleJoinRoomWithPassword('');
+            handleJoinRoomWithPassword('', room.room_code);
         }
     };
 
     // 加入房间逻辑
-    const handleJoinRoomWithPassword = async (password: string) => {
+    const handleJoinRoomWithPassword = async (password: string, roomCode?: string) => {
+        const targetRoomCode = roomCode || selectedRoomCode;
         setJoiningRoom(true);
-        try {
-            const res = await joinRoom({
-                room_code: selectedRoomCode,
-                room_password: password,
-            });
-            if (res.code === 200) {
-                message.success('加入房间成功');
-                setJoinModalVisible(false);
-                passwordForm.resetFields();
-                navigate(`/app/game/ready?room_code=${selectedRoomCode}`);
-            } else {
-                message.error(res.msg || '加入房间失败');
-            }
-        } catch (e) {
-            message.error('加入房间失败');
-        }
+        navigate(`/game?room_code=${targetRoomCode}`);
         setJoiningRoom(false);
     };
 
@@ -144,74 +152,101 @@ const CreateRoomPage = () => {
                             padding: '24px',
                         }}
                     >
-                        <Title level={2} style={{ textAlign: 'center', color: token.colorTextHeading, marginBottom: 12 }}>
-                            创建新房间
-                        </Title>
-                        <Text style={{ display: 'block', textAlign: 'center', color: token.colorTextSecondary, marginBottom: 32 }}>
-                            输入房间信息，邀请好友开始推演。
-                        </Text>
-
-                        <Form
-                            form={form}
-                            layout="vertical"
-                            onFinish={onFinish}
-                            initialValues={{ roomSize: 4, aiDmPersonality: '严肃' }}
-                        >
-                            <Form.Item
-                                name="roomSize"
-                                label={
-                                    <Title level={4} style={cardTitleStyle}>
-                                        <UserOutlined style={iconStyle} /> 房间人数
-                                    </Title>
-                                }
-                                rules={[{ required: true, message: '请选择房间可容纳人数!' }]}
-                            >
-                                <Select
-                                    size="large"
-                                    placeholder="请选择房间人数"
-                                >
-                                    {Array.from({ length: 10 }, (_, i) => i + 3).map(num => (
-                                        <Select.Option key={num} value={num}>{num}人</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-
-                            <Form.Item
-                                name="aiDmPersonality"
-                                label={
-                                    <Title level={4} style={cardTitleStyle}>
-                                        <span style={iconStyle}>🤖</span> AI DM 性格
-                                    </Title>
-                                }
-                                rules={[{ required: true, message: '请选择AI DM性格!' }]}
-                            >
-                                <Select size="large" placeholder="请选择AI DM性格">
-                                    <Select.Option value="严肃">严肃</Select.Option>
-                                    <Select.Option value="幽默">幽默</Select.Option>
-                                    <Select.Option value="可爱">可爱</Select.Option>
-                                </Select>
-                            </Form.Item>
-
-                            <Form.Item
-                                name="roomPassword"
-                                label={
-                                    <Title level={4} style={cardTitleStyle}>
-                                        <LockOutlined style={iconStyle} /> 房间密码 (选填)
-                                    </Title>
-                                }
-                            >
-                                <Input.Password
-                                    size="large"
-                                    placeholder="设置一个密码以保护你的房间"
+                        {userInRoom ? (
+                            <>
+                                <Title level={2} style={{ textAlign: 'center', color: token.colorTextHeading, marginBottom: 12 }}>
+                                    您已在房间中
+                                </Title>
+                                <Alert
+                                    message="您当前已在一个房间中"
+                                    description={`房间代码: ${currentRoomCode}。您需要先退出当前房间才能创建或加入其他房间。`}
+                                    type="info"
+                                    showIcon
+                                    style={{ marginBottom: 24 }}
                                 />
-                            </Form.Item>
+                                <div style={{ textAlign: 'center' }}>
+                                    <Button
+                                        type="primary"
+                                        size="large"
+                                        icon={<ArrowRightOutlined />}
+                                        onClick={handleEnterCurrentRoom}
+                                    >
+                                        进入当前房间
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <Title level={2} style={{ textAlign: 'center', color: token.colorTextHeading, marginBottom: 12 }}>
+                                    创建新房间
+                                </Title>
+                                <Text style={{ display: 'block', textAlign: 'center', color: token.colorTextSecondary, marginBottom: 32 }}>
+                                    输入房间信息，邀请好友开始推演。
+                                </Text>
 
-                            <Form.Item style={{ marginTop: 32, textAlign: 'center' }}>
-                                <Button type="primary" htmlType="submit" size="large" icon={<PlusCircleOutlined />}>
-                                    创建房间并进入设置
-                                </Button>
-                            </Form.Item>
-                        </Form>
+                                <Form
+                                    form={form}
+                                    layout="vertical"
+                                    onFinish={onFinish}
+                                    initialValues={{ roomSize: 4, aiDmPersonality: '严肃' }}
+                                >
+                                    <Form.Item
+                                        name="roomSize"
+                                        label={
+                                            <Title level={4} style={cardTitleStyle}>
+                                                <UserOutlined style={iconStyle} /> 房间人数
+                                            </Title>
+                                        }
+                                        rules={[{ required: true, message: '请选择房间可容纳人数!' }]}
+                                    >
+                                        <Select
+                                            size="large"
+                                            placeholder="请选择房间人数"
+                                        >
+                                            {Array.from({ length: 10 }, (_, i) => i + 3).map(num => (
+                                                <Select.Option key={num} value={num}>{num}人</Select.Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+
+                                    <Form.Item
+                                        name="aiDmPersonality"
+                                        label={
+                                            <Title level={4} style={cardTitleStyle}>
+                                                <span style={iconStyle}>🤖</span> AI DM 性格
+                                            </Title>
+                                        }
+                                        rules={[{ required: true, message: '请选择AI DM性格!' }]}
+                                    >
+                                        <Select size="large" placeholder="请选择AI DM性格">
+                                            <Select.Option value="严肃">严肃</Select.Option>
+                                            <Select.Option value="幽默">幽默</Select.Option>
+                                            <Select.Option value="可爱">可爱</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+
+                                    <Form.Item
+                                        name="roomPassword"
+                                        label={
+                                            <Title level={4} style={cardTitleStyle}>
+                                                <LockOutlined style={iconStyle} /> 房间密码 (选填)
+                                            </Title>
+                                        }
+                                    >
+                                        <Input.Password
+                                            size="large"
+                                            placeholder="设置一个密码以保护你的房间"
+                                        />
+                                    </Form.Item>
+
+                                    <Form.Item style={{ marginTop: 32, textAlign: 'center' }}>
+                                        <Button type="primary" htmlType="submit" size="large" icon={<PlusCircleOutlined />}>
+                                            创建房间并进入设置
+                                        </Button>
+                                    </Form.Item>
+                                </Form>
+                            </>
+                        )}
                     </Card>
                 </Col>
                 <Col xs={0} sm={0} md={12} style={{ paddingLeft: 24 }}>
@@ -247,7 +282,7 @@ const CreateRoomPage = () => {
                                                 size="small"
                                                 icon={<LoginOutlined />}
                                                 onClick={() => handleJoinRoom(room)}
-                                                disabled={room.status !== '等待中' || room.player_count >= room.max_players}
+                                                disabled={userInRoom || room.status !== '等待中' || room.player_count >= room.max_players}
                                             >
                                                 加入
                                             </Button>

@@ -1,3 +1,5 @@
+import type { RoomStatus } from '../../../hooks/useWebSocket';
+
 export interface Player {
     user_id: number;
     nickname: string;
@@ -34,4 +36,21 @@ export interface GameFormValues {
     specialRequests?: string;
 }
 
-export interface RoomPreparePageProps {}
+export interface RoomPreparePageProps {
+    roomCode: string;
+    isConnected?: boolean;
+    roomStatus: RoomStatus | null;
+    setReady: (ready: boolean) => void;
+    updateRoomSettings: (settings: {
+        theme?: string;
+        difficulty?: string;
+        ai_dm_personality?: string;
+        duration_mins?: number;
+    }) => void;
+    generateScript: (settings: {
+        theme?: string;
+        difficulty?: string;
+        ai_dm_personality?: string;
+        duration_mins?: number;
+    }) => void;
+}

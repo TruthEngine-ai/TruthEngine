@@ -61,6 +61,7 @@ export const createRoom = async (data: CreateRoomRequest): Promise<ApiResponse<{
 
 // 加入房间
 export const joinRoom = async (data: JoinRoomRequest): Promise<ApiResponse<{ room_code: string; user_id: number }>> => {
+    console.log('Joining room with data:', data);
     return post('/api/room/join', data);
 };
 
