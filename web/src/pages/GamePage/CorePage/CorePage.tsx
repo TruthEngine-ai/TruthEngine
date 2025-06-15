@@ -1,493 +1,871 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Typography,
   Button,
   Tabs,
   Card,
   Tag,
-  Collapse,
-  Input,
   Space,
   Divider,
   Row,
   Col,
   List,
-  message, // Renamed from 'messageApi' to 'message' to match usage
+  message,
   Badge,
-  Tooltip
+  Tooltip,
+  Alert,
+  Modal,
+  Collapse
 } from 'antd';
 import {
-  SendOutlined,
   InfoCircleOutlined,
-  ExclamationCircleOutlined,
   TeamOutlined,
   UserOutlined,
   RightCircleOutlined,
-  FileTextOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  EyeInvisibleOutlined,
+  ClockCircleOutlined,
+  SearchOutlined,
+  PlayCircleOutlined,
+  CrownOutlined,
+  ExclamationCircleOutlined,
+  HistoryOutlined,
+  SolutionOutlined
 } from '@ant-design/icons';
+import type { RoomStatus } from '../../../api/websocket';
+import { useAuth } from '../../../contexts/AuthContext';
+import useIsMobile from '../../../hooks/useIsMobile';
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
-const { TextArea } = Input;
 
-const CorePage: React.FC = () => {
-  const [currentMessage, setCurrentMessage] = useState<string>(''); // Renamed from 'message' to 'currentMessage' to avoid conflict with antd message
+interface CorePageProps {
+  roomStatus: RoomStatus;
+  onLeaveRoom?: () => void;
+  onNextStage?: () => void;
+  onSearchBegin?: () => void;
+}
 
-  // 游戏数据（在实际应用中，这些数据应该从API或状态管理中获取）
-  const gameData = {
-    title: '红雾家的玉器之谜',
-    currentAct: {
-      actNumber: 2,
-      actTitle: '深入调查',
-      objective: '收集所有角色的证词，找出赵学宁死因的关键线索。重点调查破碎玉器的来源和医学报告中的异常之处。',
-      timeLimit: '剩余 25 分钟'
-    },
-    currentPlayer: {
-      id: 1,
-      name: '李家儒',
-      age: '24岁',
-      occupation: '助手',
-      secrets: [
-        '你知道赵学宁生前曾因为一笔巨额债务而焦虑不安',
-        '你偷偷看到印医生在案发前一天晚上离开过红雾家'
-      ],
-      privateClues: [
-        { id: 'p1', title: '银行借据', content: '发现了一张赵学宁的巨额借据，金额高达500万' },
-        { id: 'p2', title: '神秘电话记录', content: '案发当晚有人给赵学宁打过电话，通话时间很短' }
-      ],
-      specialAbility: '因为带着护身符，所以能够平安。在危险时刻有额外的保护。'
-    },
-    briefInfo: `
-      百年名玉收藏家赵学宁的离世，众所不知，除事故官方死因外，红雾家早一辈精明的商业，为正中央巨
-      头背景，从而持有大量高级资产产权份额，事关世代存亡，前寒针对大面积共有土地上唯一一座的独立礼
-      堂被空，赖同有读者一同设与，对正反方均追根轻物定罪的危机，结局，即可面对一切原罪，一切外面的主人
-      需盲目不可更动，不能错不可漏不敢旁观的电影，在答题，红雾家族里不稳定不崩，才有答题的任命正三天
-      刺杀，死理会，早年生活在现代有的生活环境如冰冷不寻常，主从他个顽强，各位痛失，非财宽不不不，东西
-      一时难以格局。可知从家中简单看报。
-    `,
-    crimeDescription: `
-      今晚，因为太晚被锁在车上红雾宅院的围栏外面，整座山岭没有光，上山后，发觉探照灯全灭不亮，城门只
-      有一辆车的引擎声分外夺人，死于脖子，脸上划了几笔汽油痕，检查尸体后发现，肋骨开裂大于三段的断裂，被塞
-      进的东西。运势明显，火涕自此，随心共同，看起来地上地下。检查火灯，仪器博物馆的...真的不作死，被害的人
-      和仪，被吓厉害了，可怜人大闹？检伤害尸主上也一切不适副作用吗，反而已经等他好了！无条件为什么
-      被工！可能得找人上无主之散，与家庭的时代无关。
-    `,
-    characterActions: [
-      { id: 1, title: '林昶莹的线索', content: '林昶莹：我今年26岁（2023年），我是医生的女....' },
-      { id: 2, title: '李家儒的线索', content: '李家儒：今年24岁（1998出生），受家族影响仍旧....' },
-      { id: 3, title: '印医生的线索', content: '印医生：今年42岁(2301)，是家庭医生，具有...' },
-    ],
-    characters: [
-      { 
-        id: 1, 
-        name: '李家儒', 
-        type: '玩家', 
-        age: '24岁', 
-        occupation: '助手',  
-        active: true,
-        description: '出生于世家，受家族影响仍旧不能与红雾家的宿命三人组当中任何一人有不必要的联系。因为带着护身符，所以能够平安。' 
-      },
-      { 
-        id: 2, 
-        name: '林昶莹', 
-        type: '玩家', 
-        age: '27岁', 
-        occupation: '护士/医生', 
-        active: true,
-        description: '祖传医术，驰名城区，在学术界，生性好奇，追求真理。特殊技能见微知著，最好在绝望时刻自我拯救。' 
-      },
-      { 
-        id: 3, 
-        name: '印医生', 
-        type: 'NPC', 
-        age: '42岁', 
-        occupation: '医生/教授', 
-        description: '论文等级高，言谈优雅，在玉器学上所知甚广，特阿姆更"敌意"谁能被救，解锁线索中会暗示往者的线索。' 
-      },
-      { 
-        id: 4, 
-        name: '赛娜', 
-        type: 'NPC', 
-        age: '30岁', 
-        occupation: '学者/秘书', 
-        description: '知识丰富，态度严格，相对与红雾家疏离，擅长解密，娇小灵活，占据有利位置时轻松脱身。' 
-      }
-    ],
-    clues: [
-      { id: 1, title: '破碎的玉器', type: '物证' },
-      { id: 2, title: '红雾家族史', type: '文献' },
-      { id: 3, title: '医学报告', type: '文件' },
-      { id: 4, title: '神秘钥匙', type: '物品' }
-    ]
-  };
-  
+const CorePage: React.FC<CorePageProps> = ({
+  roomStatus,
+  onLeaveRoom,
+  onNextStage,
+  onSearchBegin
+}) => {
+  const { user } = useAuth();
+  const isMobile = useIsMobile();
+
+  // 找到当前玩家角色
+  const currentPlayer = roomStatus.characters?.find(char => char.is_self);
+
+  // 检查当前用户是否为房主
+  const isHost = user?.id === roomStatus.room.host_user_id;
+
+  // 检查是否为最后一幕
+  const isLastStage = roomStatus.current_stage?.current_stage.stage_number === roomStatus.script?.total_stages;
+
   const handleLeaveRoom = () => {
-    if (window.confirm('确定要离开房间吗？')) {
-      message.success('已离开房间');
-      // 这里应该有导航到房间列表或其他逻辑
-    }
+    Modal.confirm({
+      title: '确认离开房间',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要离开房间吗？离开后需要重新加入。',
+      okText: '确定离开',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk() {
+        message.success('已离开房间');
+        onLeaveRoom?.();
+      }
+    });
   };
 
-  const handleNextAct = () => {
-    if (window.confirm('确定要进入下一幕吗？')) {
-      message.success('正在进入下一幕...');
-      // 这里应该有进入下一幕的逻辑
+  const handleNextStage = () => {
+    if (!isHost) {
+      message.warning('只有房主可以操作进入下一幕');
+      return;
     }
+
+    const title = isLastStage ? '确认进入投票环节' : '确认进入下一幕';
+    const content = isLastStage
+      ? '确定要进入投票环节吗？进入后将开始最终投票阶段，无法返回当前幕。'
+      : '确定要进入下一幕吗？';
+
+    Modal.confirm({
+      title,
+      icon: <ExclamationCircleOutlined />,
+      content,
+      okText: isLastStage ? '进入投票' : '进入下一幕',
+      cancelText: '取消',
+      onOk() {
+        onNextStage?.();
+        message.info(isLastStage ? '正在进入投票环节...' : '正在进入下一幕...');
+      }
+    });
   };
-  
-  const handleSendMessage = () => {
-    if (currentMessage.trim()) {
-      // 处理消息发送逻辑
-      message.success('消息已发送');
-      setCurrentMessage('');
+
+  const handleSearchBegin = () => {
+    if (!isHost) {
+      message.warning('只有房主可以操作开始搜查');
+      return;
     }
+
+    Modal.confirm({
+      title: '确认开始搜查',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要开始搜查吗？开始后玩家可以进行搜证行动。',
+      okText: '开始搜查',
+      cancelText: '取消',
+      onOk() {
+        onSearchBegin?.();
+        message.info('正在开始搜查...');
+      }
+    });
   };
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          padding: '0 24px', 
-          background: '#fff', 
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.09)',
-          zIndex: 1,
-          height: '64px'
-        }}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: isMobile ? '0 12px' : '0 24px',
+        background: '#fff',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.09)',
+        zIndex: 1,
+        height: isMobile ? '48px' : '64px',
+        flexWrap: isMobile ? 'wrap' : 'nowrap'
+      }}
       >
-        <Title level={3} style={{ margin: 0, color: '#1a1a1a' }}>{gameData.title}</Title>
-        <Button 
-          type="primary" 
-          danger 
+        <Title 
+          level={isMobile ? 4 : 3} 
+          style={{ 
+            margin: 0, 
+            color: '#1a1a1a',
+            fontSize: isMobile ? '14px' : undefined,
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {roomStatus.script?.title || '游戏进行中'}
+        </Title>
+        <Button
+          type="primary"
+          danger
           icon={<LogoutOutlined />}
           onClick={handleLeaveRoom}
+          size={isMobile ? 'small' : 'middle'}
         >
-          离开房间
+          {isMobile ? '离开' : '离开房间'}
         </Button>
       </div>
-      
+
       {/* Main Content */}
-      <div style={{ flex: 1 }}>
-        {/* 当前幕信息 */}
-        <Card 
-          style={{ 
-            marginBottom: '24px', 
-            borderRadius: '8px', 
+      <div style={{ flex: 1, padding: isMobile ? '12px' : '24px' }}>
+        {/* 剧本信息 */}
+        <Card
+          style={{
+            marginBottom: isMobile ? '12px' : '24px',
+            borderRadius: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             border: 'none'
           }}
         >
-          <Row gutter={24} align="middle">
-            <Col xs={24} sm={16}>
+          <Row gutter={isMobile ? 12 : 24} align="middle">
+            <Col xs={24} sm={18}>
               <Space direction="vertical" size={4}>
-                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                  第 {gameData.currentAct.actNumber} 幕
-                </Text>
-                <Title level={3} style={{ margin: 0, color: '#fff' }}>
-                  {gameData.currentAct.actTitle}
-                </Title>
-              </Space>
-            </Col>
-            <Col xs={24} sm={8} style={{ textAlign: 'right' }}>
-              <Button 
-                type="default"
-                size="large"
-                icon={<RightCircleOutlined />}
-                onClick={handleNextAct}
-                style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  borderColor: 'rgba(255,255,255,0.3)',
-                  color: '#fff',
-                  fontWeight: 'bold'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
-                }}
-              >
-                下一幕
-              </Button>
-            </Col>
-          </Row>
-          <Divider style={{ borderColor: 'rgba(255,255,255,0.3)', margin: '16px 0' }} />
-          <div style={{ 
-            background: 'rgba(255,255,255,0.1)', 
-            borderRadius: '6px', 
-            padding: '16px',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <Space>
-              <FileTextOutlined style={{ color: '#fff', fontSize: '16px' }} />
-              <Text strong style={{ color: '#fff' }}>当前目标：</Text>
-            </Space>
-            <Paragraph style={{ color: '#fff', margin: '8px 0 0 0', lineHeight: '1.6' }}>
-              {gameData.currentAct.objective}
-            </Paragraph>
-          </div>
-        </Card>
-
-        <Row gutter={24}>
-          <Col xs={24} md={16}>
-            {/* 左侧内容区域 */}
-            <Tabs defaultActiveKey="1" type="card">
-              <TabPane 
-                tab={<span><InfoCircleOutlined /> 基本信息详情</span>}
-                key="1"
-              >
-                <Card 
-                  bordered={false} 
-                  style={{ borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
-                  headStyle={{ backgroundColor: '#fafafa' }}
-                >
-                  <Paragraph>{gameData.briefInfo}</Paragraph>
-                  <Divider orientation="left">收集到的线索</Divider>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <Title 
+                    level={isMobile ? 4 : 2} 
+                    style={{ margin: 0, color: '#fff' }}
+                  >
+                    {roomStatus.script?.title}
+                  </Title>
                   <Space wrap>
-                    {gameData.clues.map(clue => (
-                      <Tag 
-                        key={clue.id} 
-                        color="blue" 
-                        style={{ margin: '4px', cursor: 'pointer' }}
-                      >
-                        {clue.title}
+                    {roomStatus.script?.tags?.slice(0, isMobile ? 2 : 3).map((tag, index) => (
+                      <Tag key={index} color="rgba(255,255,255,0.2)" style={{
+                        color: '#fff',
+                        borderColor: 'rgba(255,255,255,0.3)',
+                        background: 'rgba(255,255,255,0.1)',
+                        fontSize: isMobile ? '11px' : '12px'
+                      }}>
+                        {tag}
                       </Tag>
                     ))}
                   </Space>
+                </div>
+                <Text style={{ 
+                  color: 'rgba(255,255,255,0.9)', 
+                  fontSize: isMobile ? '13px' : '16px', 
+                  lineHeight: '1.5',
+                  display: isMobile ? '-webkit-box' : 'block',
+                  WebkitLineClamp: isMobile ? 2 : 'none',
+                  WebkitBoxOrient: 'vertical',
+                  overflow: isMobile ? 'hidden' : 'visible'
+                }}>
+                  {roomStatus.script?.description}
+                </Text>
+              </Space>
+            </Col>
+            <Col xs={24} sm={6} style={{ textAlign: isMobile ? 'left' : 'right', marginTop: isMobile ? '12px' : 0 }}>
+              <Space direction={isMobile ? 'horizontal' : 'vertical'} size={8} style={{ width: '100%', alignItems: isMobile ? 'center' : 'flex-end' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', display: 'block' }}>
+                    房间代码
+                  </Text>
+                  <Text style={{ color: '#fff', fontSize: isMobile ? '16px' : '20px', fontWeight: 'bold' }}>
+                    {roomStatus.room.code}
+                  </Text>
+                </div>
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: isMobile ? '12px' : '14px' }}>
+                  {roomStatus.room.game_settings?.theme} · {roomStatus.room.game_settings?.difficulty}
+                </Text>
+              </Space>
+            </Col>
+          </Row>
+        </Card>
+
+        <Row gutter={isMobile ? 12 : 24}>
+          <Col xs={24} md={isMobile ? 24 : 16}>
+            {/* 左侧内容区域 */}
+            <Tabs 
+              defaultActiveKey="1" 
+              type="card"
+              size={isMobile ? 'small' : 'middle'}
+              tabPosition={isMobile ? 'top' : 'top'}
+            >
+              <TabPane
+                tab={<span><PlayCircleOutlined /> {isMobile ? '当前幕' : '当前幕'}</span>}
+                key="1"
+              >
+                {/* 剧本背景 */}
+                <Card
+                  bordered={false}
+                  style={{ 
+                    borderRadius: '8px', 
+                    marginBottom: isMobile ? '12px' : '16px', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
+                  }}
+                  title="案件背景"
+                  size={isMobile ? 'small' : 'default'}
+                >
+                  <Paragraph style={{ 
+                    fontSize: isMobile ? '13px' : '14px', 
+                    lineHeight: '1.6' 
+                  }}>
+                    {roomStatus.script?.overview}
+                  </Paragraph>
                 </Card>
+
+                {/* 历史幕信息 */}
+                {roomStatus.current_stage?.all_stages && (
+                  <Card
+                    title={
+                      <Space wrap>
+                        <HistoryOutlined />
+                        <span>剧情进展</span>
+                        <Tooltip title={isHost ? '开始搜查' : '只有房主可以操作'}>
+                          <Button
+                            type="default"
+                            size="small"
+                            icon={<SearchOutlined />}
+                            onClick={handleSearchBegin}
+                            disabled={!isHost}
+                            style={{
+                              opacity: isHost ? 1 : 0.6,
+                              fontSize: isMobile ? '11px' : '12px'
+                            }}
+                          >
+                            {isMobile ? '搜查' : (isHost ? '进入搜查' : '进入搜查（仅房主）')}
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title={isHost ? (isLastStage ? '进入投票环节' : '进入下一幕') : '只有房主可以操作'}>
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={isHost ? <RightCircleOutlined /> : <CrownOutlined />}
+                            onClick={handleNextStage}
+                            disabled={!isHost}
+                            style={{
+                              opacity: isHost ? 1 : 0.6,
+                              fontSize: isMobile ? '11px' : '12px'
+                            }}
+                          >
+                            {isMobile ? (isLastStage ? '投票' : '下一幕') : (isHost ? (isLastStage ? '进入投票' : '下一幕') : '下一幕（仅房主）')}
+                          </Button>
+                        </Tooltip>
+                      </Space>
+                    }
+                    bordered={false}
+                    style={{ 
+                      borderRadius: '8px', 
+                      marginBottom: isMobile ? '12px' : '16px', 
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
+                    }}
+                    size={isMobile ? 'small' : 'default'}
+                  >
+                    <Collapse ghost defaultActiveKey={[roomStatus.current_stage.current_stage.stage_number.toString()]}>
+                      {roomStatus.current_stage.all_stages
+                        .sort((a, b) => a.stage_number - b.stage_number)
+                        .map(stage => (
+                          <Panel
+                            header={
+                              <Space>
+                                <Text strong style={{
+                                  color: stage.is_current ? '#1890ff' : '#666',
+                                  fontSize: stage.is_current ? '15px' : '14px'
+                                }}>
+                                  第 {stage.stage_number} 幕：{stage.name}
+                                </Text>
+                                {stage.is_current && <Tag color="blue">当前幕</Tag>}
+                                {!stage.is_current && roomStatus.current_stage && stage.stage_number < roomStatus.current_stage.current_stage.stage_number && (
+                                  <Tag color="green">已完成</Tag>
+                                )}
+                              </Space>
+                            }
+                            key={stage.stage_number}
+                            style={{
+                              border: stage.is_current ? '1px solid #1890ff' : 'none',
+                              borderRadius: '6px',
+                              marginBottom: '8px',
+                              background: stage.is_current ? '#f0f8ff' : 'transparent'
+                            }}
+                          >
+                            <div style={{ paddingLeft: '16px' }}>
+                              <div style={{ marginBottom: '12px' }}>
+                                <Text strong style={{ color: '#1890ff' }}>剧情描述</Text>
+                                <Paragraph style={{ margin: '6px 0', fontSize: '13px', lineHeight: '1.6' }}>
+                                  {stage.opening_narrative}
+                                </Paragraph>
+                              </div>
+
+                              <div style={{ marginBottom: '12px' }}>
+                                <Text strong style={{ color: '#52c41a' }}>幕目标</Text>
+                                <Paragraph style={{ margin: '6px 0', fontSize: '13px', lineHeight: '1.6' }}>
+                                  {stage.stage_goal}
+                                </Paragraph>
+                              </div>
+
+                              {stage.character_goal && (
+                                <div>
+                                  <Text strong style={{ color: '#fa541c' }}>阶段提示</Text>
+                                  <div style={{ margin: '6px 0' }}>
+                                    <Paragraph style={{ margin: 0, fontSize: '13px', lineHeight: '1.6' }}>
+                                      {stage.character_goal.goal_description}
+                                    </Paragraph>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </Panel>
+                        ))}
+                    </Collapse>
+                  </Card>
+                )}
 
                 {/* 所有角色信息 */}
                 <Card
                   title={<span><TeamOutlined /> 所有角色</span>}
                   bordered={false}
+                  style={{ 
+                    borderRadius: '8px', 
+                    marginBottom: isMobile ? '12px' : '16px', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
+                  }}
+                  size={isMobile ? 'small' : 'default'}
+                >
+                  <Row gutter={isMobile ? 8 : 16}>
+                    {roomStatus.characters?.map(char => {
+                      // 根据角色的玩家昵称找到对应的玩家信息
+                      const player = roomStatus.players?.find(p => p.nickname === char.player_nickname);
+                      const isOnline = player?.is_online || false;
+
+                      return (
+                        <Col xs={24} sm={isMobile ? 24 : 12} key={char.character_id} style={{ marginBottom: isMobile ? '8px' : '16px' }}>
+                          <Card
+                            size="small"
+                            style={{
+                              borderLeft: char.is_self ? '4px solid #52c41a' : char.is_alive ? '4px solid #1890ff' : '4px solid #d9d9d9',
+                              borderRadius: '6px',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                              opacity: isOnline ? 1 : 0.6,
+                              filter: isOnline ? 'none' : 'grayscale(0.3)'
+                            }}
+                            title={
+                              <Space>
+                                <Badge status={char.is_alive ? "success" : "error"} />
+                                <span style={{
+                                  fontSize: '14px',
+                                  color: isOnline ? 'inherit' : '#999'
+                                }}>
+                                  {char.character_name}
+                                </span>
+                                <Tag color={isOnline ? 'green' : 'red'}>
+                                  {isOnline ? '在线' : '离线'}
+                                </Tag>
+                                {char.is_self && <Tooltip title="当前角色"><UserOutlined /></Tooltip>}
+                                {/* 显示房主标识 */}
+                                {player?.is_host && (
+                                  <Tooltip title="房主">
+                                    <CrownOutlined style={{ color: '#faad14' }} />
+                                  </Tooltip>
+                                )}
+                              </Space>
+                            }
+                            bordered={false}
+                          >
+                            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                              <Text style={{ color: isOnline ? 'inherit' : '#999' }}>
+                                <Text strong>性别：</Text>{char.gender}
+                              </Text>
+                              <Text style={{ color: isOnline ? 'inherit' : '#999' }}>
+                                <Text strong>玩家：</Text>{char.player_nickname}
+                              </Text>
+                              <Paragraph style={{
+                                margin: 0,
+                                fontSize: '12px',
+                                color: isOnline ? '#666' : '#999'
+                              }}>
+                                {char.public_info}
+                              </Paragraph>
+                            </Space>
+                          </Card>
+                        </Col>
+                      );
+                    })}
+                  </Row>
+                </Card>
+              </TabPane>
+
+
+              <TabPane
+                tab={<span><ClockCircleOutlined /> 故事时间线</span>}
+                key="3"
+              >
+                {/* 公开时间线 */}
+                <Card
+                  title="公开时间线"
+                  bordered={false}
                   style={{ borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
-                  headStyle={{ backgroundColor: '#fafafa' }}
+                >
+                  <List
+                    dataSource={roomStatus.story_timeline?.public || []}
+                    renderItem={(event) => (
+                      <List.Item>
+                        <Card size="small" style={{ width: '100%' }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            <Tag color="blue">{event.character_name}</Tag>
+
+                          </div>
+                          <Paragraph style={{ margin: 0 }}>
+                            {event.event_description}
+                          </Paragraph>
+                        </Card>
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+
+                {/* 私有时间线（仅当玩家是凶手时显示） */}
+                {currentPlayer?.is_murderer && roomStatus.story_timeline?.private && roomStatus.story_timeline.private.length > 0 && (
+                  <Card
+                    title={
+                      <span style={{ color: '#fa541c' }}>
+                        <EyeInvisibleOutlined /> 私有时间线（仅你可见）
+                      </span>
+                    }
+                    bordered={false}
+                    style={{
+                      borderRadius: '8px',
+                      marginBottom: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderLeft: '4px solid #fa541c'
+                    }}
+                  >
+                    <List
+                      dataSource={roomStatus.story_timeline.private}
+                      renderItem={(event) => (
+                        <List.Item>
+                          <Card size="small" style={{ width: '100%', background: '#fff7e6' }}>
+                            <div style={{ marginBottom: '8px' }}>
+                              <Tag color="orange">{event.character_name}</Tag>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                {new Date(event.created_at).toLocaleString()}
+                              </Text>
+                            </div>
+                            <Paragraph style={{ margin: 0 }}>
+                              {event.event_description}
+                            </Paragraph>
+                          </Card>
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                )}
+              </TabPane>
+
+              <TabPane
+                tab={<span><SearchOutlined /> 线索收集</span>}
+                key="4"
+              >
+                {/* 公开线索 */}
+                <Card
+                  title="公开线索"
+                  bordered={false}
+                  style={{ borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
                 >
                   <Row gutter={16}>
-                    {gameData.characters.map(char => (
-                      <Col xs={24} sm={12} key={char.id} style={{ marginBottom: '16px' }}>
+                    {roomStatus.clues?.public?.map(clue => (
+                      <Col xs={24} sm={12} key={clue.id} style={{ marginBottom: '16px' }}>
                         <Card
                           size="small"
-                          style={{
-                            borderLeft: char.active ? '4px solid #52c41a' : '4px solid #d9d9d9',
-                            borderRadius: '6px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                          }}
-                          title={
-                            <Space>
-                              <Badge status={char.active ? "success" : "default"} />
-                              <span style={{ fontSize: '14px' }}>{char.name}</span>
-                              <Tag color={char.type === 'NPC' ? 'default' : 'green'}>
-                                {char.type}
-                              </Tag>
-                              {char.active && <Tooltip title="当前角色"><UserOutlined /></Tooltip>}
-                            </Space>
-                          }
-                          bordered={false}
+                          title={clue.name}
+                          extra={<Tag color="blue">{clue.discovery_stage}</Tag>}
                         >
-                          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                            <Text><Text strong>年龄：</Text>{char.age}</Text>
-                            <Text><Text strong>职业：</Text>{char.occupation}</Text>
-                            <Paragraph style={{ margin: 0, fontSize: '12px', color: '#666' }}>
-                              {char.description}
-                            </Paragraph>
-                          </Space>
+                          <Paragraph style={{ fontSize: '13px', margin: 0 }}>
+                            {clue.description}
+                          </Paragraph>
+                          <div style={{ marginTop: '8px' }}>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              发现地点：{clue.discovery_location}
+                            </Text>
+                            <br />
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              来源：{clue.source === 'script' ? '剧本' : '搜查'}
+                            </Text>
+                          </div>
                         </Card>
                       </Col>
                     ))}
                   </Row>
                 </Card>
+
+                {/* 私有线索 */}
+                {roomStatus.clues?.private && roomStatus.clues.private.length > 0 && (
+                  <Card
+                    title={<span style={{ color: '#52c41a' }}>🔍 私有线索</span>}
+                    bordered={false}
+                    style={{
+                      borderRadius: '8px',
+                      marginBottom: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderLeft: '4px solid #52c41a'
+                    }}
+                  >
+                    <Row gutter={16}>
+                      {roomStatus.clues.private.map(clue => (
+                        <Col xs={24} sm={12} key={clue.id} style={{ marginBottom: '16px' }}>
+                          <Card
+                            size="small"
+                            title={clue.name}
+                            extra={<Tag color="green">{clue.discovery_stage}</Tag>}
+                            style={{ background: '#f6ffed' }}
+                          >
+                            <Paragraph style={{ fontSize: '13px', margin: 0 }}>
+                              {clue.description}
+                            </Paragraph>
+                            <div style={{ marginTop: '8px' }}>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                发现地点：{clue.discovery_location}
+                              </Text>
+                              <br />
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                来源：{clue.source === 'script' ? '剧本' : '搜查'}
+                              </Text>
+                            </div>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+                )}
+
+                {/* 搜查获得的线索 */}
+                {roomStatus.clues?.searched && roomStatus.clues.searched.length > 0 && (
+                  <Card
+                    title={<span style={{ color: '#fa8c16' }}>🔎 搜查线索</span>}
+                    bordered={false}
+                    style={{
+                      borderRadius: '8px',
+                      marginBottom: '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderLeft: '4px solid #fa8c16'
+                    }}
+                  >
+                    <Row gutter={16}>
+                      {roomStatus.clues.searched.map(clue => (
+                        <Col xs={24} sm={12} key={clue.id} style={{ marginBottom: '16px' }}>
+                          <Card
+                            size="small"
+                            title={clue.name}
+                            extra={
+                              <Space>
+                                <Tag color="orange">{clue.discovery_stage}</Tag>
+                                {clue.is_public_search && <Tag color="cyan">公开搜查</Tag>}
+                              </Space>
+                            }
+                            style={{ background: '#fff7e6' }}
+                          >
+                            <Paragraph style={{ fontSize: '13px', margin: 0 }}>
+                              {clue.description}
+                            </Paragraph>
+                            <div style={{ marginTop: '8px' }}>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                发现地点：{clue.discovery_location}
+                              </Text>
+                              <br />
+                              {clue.searched_from && (
+                                <>
+                                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    搜查来源：{clue.searched_from}
+                                  </Text>
+                                  <br />
+                                </>
+                              )}
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                搜查类型：{clue.is_public_search ? '公开搜查' : '私密搜查'}
+                              </Text>
+                            </div>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+                )}
               </TabPane>
-              
+
               <TabPane
-                tab={<span><ExclamationCircleOutlined /> 案件概述</span>}
+                tab={<span><InfoCircleOutlined /> 剧本详情</span>}
                 key="2"
               >
-                <Card 
+                <Card
                   bordered={false}
                   style={{ borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
-                  headStyle={{ backgroundColor: '#fafafa' }}
+                  title="剧本信息"
                 >
-                  <Paragraph>{gameData.crimeDescription}</Paragraph>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Text><Text strong>难度等级：</Text>{roomStatus.script?.difficulty}</Text>
+                    </Col>
+                    <Col span={12}>
+                      <Text><Text strong>游戏时长：</Text>{roomStatus.script?.duration_mins} 分钟</Text>
+                    </Col>
+                    <Col span={12}>
+                      <Text><Text strong>玩家数量：</Text>{roomStatus.script?.player_count_min}-{roomStatus.script?.player_count_max} 人</Text>
+                    </Col>
+                    <Col span={12}>
+                      <Text><Text strong>房间状态：</Text>{roomStatus.room.status}</Text>
+                    </Col>
+                  </Row>
+
+                  <Divider orientation="left">剧本标签</Divider>
+                  <Space wrap>
+                    {roomStatus.script?.tags?.map((tag, index) => (
+                      <Tag key={index} color="blue">
+                        {tag}
+                      </Tag>
+                    ))}
+                  </Space>
+
+                  {roomStatus.room.started_at && (
+                    <>
+                      <Divider orientation="left">游戏时间</Divider>
+                      <Text><Text strong>开始时间：</Text>{new Date(roomStatus.room.started_at).toLocaleString()}</Text>
+                    </>
+                  )}
                 </Card>
               </TabPane>
-              
-              <TabPane
-                tab={<span><RightCircleOutlined /> 角色行动线</span>}
-                key="3"
-              >
-                <Collapse accordion>
-                  {gameData.characterActions.map(action => (
-                    <Panel header={action.title} key={action.id}>
-                      <Paragraph>{action.content}</Paragraph>
-                    </Panel>
-                  ))}
-                </Collapse>
-              </TabPane>
-              
-              <TabPane
-                tab={<span><FileTextOutlined /> 公开信息</span>}
-                key="4"
-              >
-                <Card 
-                  bordered={false}
-                  title="游戏规则"
-                  style={{ borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
-                  headStyle={{ backgroundColor: '#fafafa' }}
+
+              {/* 复盘Tab - 只有当solution存在时才显示 */}
+              {roomStatus.solution && (
+                <TabPane
+                  tab={<span><SolutionOutlined /> 游戏复盘</span>}
+                  key="5"
                 >
-                  <List
-                    size="small"
-                    dataSource={[
-                      '每位玩家轮流行动，探索线索',
-                      '收集证据，拼凑真相',
-                      '在规定时间内提交推理结果',
-                      '系统会根据推理准确度评分'
-                    ]}
-                    renderItem={item => (
-                      <List.Item>
-                        <Text>{item}</Text>
-                      </List.Item>
-                    )}
-                  />
-                </Card>
-                
-                <Card 
-                  bordered={false}
-                  title="游戏背景"
-                  style={{ marginTop: 16, borderRadius: '8px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
-                  headStyle={{ backgroundColor: '#fafafa' }}
-                >
-                  <Paragraph>
-                    红雾家族是一个历史悠久的世家，家族中收藏了许多珍贵的古玉器。
-                    近期一件价值连城的玉器失窃，同时家族中发生了一起离奇的命案。
-                    玩家需要在有限的时间内，通过搜集线索、分析证据，找出真凶。
-                  </Paragraph>
-                </Card>
-              </TabPane>
+                  <Card
+                    title={
+                      <Space>
+                        <SolutionOutlined style={{ color: '#fa541c' }} />
+                        <span style={{ color: '#fa541c' }}>案件真相</span>
+                      </Space>
+                    }
+                    bordered={false}
+                    style={{
+                      borderRadius: '8px',
+                      marginBottom: isMobile ? '12px' : '16px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderLeft: '4px solid #fa541c'
+                    }}
+                    headStyle={{ backgroundColor: '#fff7e6' }}
+                    size={isMobile ? 'small' : 'default'}
+                  >
+                    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                      <div>
+                        <Title level={4} style={{ color: '#fa541c', marginBottom: '12px' }}>
+                          案件答案
+                        </Title>
+                        <Card
+                          size="small"
+                          style={{
+                            background: '#fff2e8',
+                            border: '1px solid #ffbb96'
+                          }}
+                        >
+                          <Text style={{
+                            fontSize: isMobile ? '14px' : '16px',
+                            lineHeight: '1.6',
+                            color: '#2f1b14'
+                          }}>
+                            {roomStatus.solution.answer}
+                          </Text>
+                        </Card>
+                      </div>
+
+                      <div>
+                        <Title level={4} style={{ color: '#fa541c', marginBottom: '12px' }}>
+                          推理过程
+                        </Title>
+                        <Card
+                          size="small"
+                          style={{
+                            background: '#fff2e8',
+                            border: '1px solid #ffbb96'
+                          }}
+                        >
+                          <Paragraph style={{
+                            fontSize: isMobile ? '13px' : '14px',
+                            lineHeight: '1.8',
+                            margin: 0,
+                            color: '#2f1b14',
+                            whiteSpace: 'pre-wrap'
+                          }}>
+                            {roomStatus.solution.reasoning}
+                          </Paragraph>
+                        </Card>
+                      </div>
+
+                      <Alert
+                        message="游戏结束"
+                        description="以上是本案的完整真相和推理过程，感谢参与游戏！"
+                        type="success"
+                        showIcon
+                        style={{ fontSize: isMobile ? '12px' : '14px' }}
+                      />
+                    </Space>
+                  </Card>
+                </TabPane>
+              )}
+
             </Tabs>
           </Col>
-          
-          <Col xs={24} md={8}>
+
+          <Col xs={24} md={isMobile ? 24 : 8} style={{ marginTop: isMobile ? '16px' : 0 }}>
             {/* 个人信息区域 */}
-            <Card
-              title={<span><UserOutlined /> 我的角色信息</span>}
-              bordered={false}
-              style={{ 
-                borderRadius: '8px', 
-                marginBottom: '16px', 
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #1890ff'
-              }}
-              headStyle={{ backgroundColor: '#f0f8ff' }}
-            >
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <div>
-                  <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
-                    {gameData.currentPlayer.name}
-                  </Text>
-                  <div style={{ marginTop: '4px' }}>
-                    <Text type="secondary">{gameData.currentPlayer.age} · {gameData.currentPlayer.occupation}</Text>
-                  </div>
-                </div>
-                
-                <div>
-                  <Text strong>特殊能力：</Text>
-                  <Paragraph style={{ margin: '4px 0 0 0', fontSize: '13px' }}>
-                    {gameData.currentPlayer.specialAbility}
-                  </Paragraph>
-                </div>
-              </Space>
-            </Card>
-
-            {/* 个人秘密 */}
-            <Card
-              title={<span style={{ color: '#fa541c' }}>🔒 个人秘密</span>}
-              bordered={false}
-              style={{ 
-                borderRadius: '8px', 
-                marginBottom: '16px', 
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #fa541c'
-              }}
-              headStyle={{ backgroundColor: '#fff7e6' }}
-            >
-              <List
-                size="small"
-                dataSource={gameData.currentPlayer.secrets}
-                renderItem={(secret, index) => (
-                  <List.Item>
-                    <Text style={{ fontSize: '13px', lineHeight: '1.5' }}>
-                      {index + 1}. {secret}
-                    </Text>
-                  </List.Item>
-                )}
-              />
-            </Card>
-
-            {/* 私有线索 */}
-            <Card
-              title={<span style={{ color: '#52c41a' }}>🔍 私有线索</span>}
-              bordered={false}
-              style={{ 
-                borderRadius: '8px', 
-                marginBottom: '16px', 
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #52c41a'
-              }}
-              headStyle={{ backgroundColor: '#f6ffed' }}
-            >
-              <Collapse size="small" ghost>
-                {gameData.currentPlayer.privateClues.map(clue => (
-                  <Panel 
-                    header={
-                      <Space>
-                        <Badge status="success" />
-                        <Text strong style={{ fontSize: '13px' }}>{clue.title}</Text>
-                      </Space>
-                    } 
-                    key={clue.id}
-                  >
-                    <Text style={{ fontSize: '13px', color: '#666' }}>
-                      {clue.content}
-                    </Text>
-                  </Panel>
-                ))}
-              </Collapse>
-            </Card>
-          </Col>
-        </Row>
-      </div>
-      
-      {/* Footer */}
-      <div style={{ padding: '12px 24px', background: '#fff', boxShadow: '0 -2px 8px rgba(0,0,0,0.09)' }}>
-        <Row gutter={16} align="middle">
-          <Col flex="auto">
-            <TextArea 
-              value={currentMessage}
-              onChange={e => setCurrentMessage(e.target.value)}
-              placeholder="输入消息..."
-              autoSize={{ minRows: 1, maxRows: 3 }}
-              onPressEnter={(e) => {
-                if (!e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
+            {currentPlayer && (
+              <Card
+                title={
+                  <Space>
+                    <UserOutlined />
+                    <span style={{ fontSize: isMobile ? '14px' : '16px' }}>我的角色信息</span>
+                    {isHost && (
+                      <Tooltip title="房主">
+                        <CrownOutlined style={{ color: '#faad14' }} />
+                      </Tooltip>
+                    )}
+                  </Space>
                 }
-              }}
-            />
-          </Col>
-          <Col>
-            <Button 
-              type="primary" 
-              icon={<SendOutlined />} 
-              onClick={handleSendMessage}
-            >
-              发送
-            </Button>
+                bordered={false}
+                style={{
+                  borderRadius: '8px',
+                  marginBottom: isMobile ? '12px' : '16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  borderLeft: '4px solid #1890ff'
+                }}
+                headStyle={{ backgroundColor: '#f0f8ff' }}
+                size={isMobile ? 'small' : 'default'}
+              >
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <div>
+                    <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                      {currentPlayer.character_name}
+                    </Text>
+                    <div style={{ marginTop: '4px' }}>
+                      <Text type="secondary">{currentPlayer.gender} · 玩家：{currentPlayer.player_nickname}</Text>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Text strong>角色描述：</Text>
+                    <Paragraph style={{ margin: '4px 0 0 0', fontSize: '13px' }}>
+                      {currentPlayer.public_info}
+                    </Paragraph>
+                  </div>
+
+                  {/* 身份警告 */}
+                  {currentPlayer.is_murderer && (
+                    <Alert
+                      message="你是凶手"
+                      description="请小心隐藏身份，完成你的任务目标"
+                      type="warning"
+                      showIcon
+                      style={{ fontSize: '12px' }}
+                    />
+                  )}
+                </Space>
+              </Card>
+            )}
+
+            {/* 角色背景故事 */}
+            {currentPlayer?.backstory && (
+              <Card
+                title={<span style={{ color: '#fa541c' }}>🔒 角色背景</span>}
+                bordered={false}
+                style={{
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  borderLeft: '4px solid #fa541c'
+                }}
+                headStyle={{ backgroundColor: '#fff7e6' }}
+              >
+                <Paragraph style={{ fontSize: '13px', lineHeight: '1.5', margin: 0 }}>
+                  {currentPlayer.backstory}
+                </Paragraph>
+              </Card>
+            )}
+
+            {/* 个人目标 */}
+            {roomStatus.current_stage?.current_stage.character_goal && (
+              <Card
+                title={<span style={{ color: '#52c41a' }}>🎯 剧情提示</span>}
+                bordered={false}
+                style={{
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  borderLeft: '4px solid #52c41a'
+                }}
+                headStyle={{ backgroundColor: '#f6ffed' }}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Paragraph style={{ fontSize: '13px', margin: 0 }}>
+                    {roomStatus.current_stage.current_stage.character_goal.goal_description}
+                  </Paragraph>
+                  <div>
+                    <Tag color={roomStatus.current_stage.current_stage.character_goal.is_mandatory ? 'red' : 'blue'}>
+                      {roomStatus.current_stage.current_stage.character_goal.is_mandatory ? '强制目标' : '可选目标'}
+                    </Tag>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      搜证次数：{roomStatus.current_stage.current_stage.character_goal.search_attempts}
+                    </Text>
+                  </div>
+                </Space>
+              </Card>
+            )}
           </Col>
         </Row>
       </div>
