@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 
 class MessageType(str, Enum):
@@ -50,6 +50,10 @@ class MessageType(str, Enum):
     CLUE_DISCOVERED = "clue_discovered"
     CLUE_SHARED = "clue_shared"
     
+    #搜证相关
+    SEARCH_BEGIN = "search_begin"
+    SEARCH_END = "search_end"
+    
     # AI DM相关
     AI_MESSAGE = "ai_message"
     AI_PROMPT = "ai_prompt"
@@ -60,6 +64,8 @@ class MessageType(str, Enum):
     
     # 游戏状态相关
     GAME_STATUS = "game_status"
+    GAME_PHASE_CHANGED = "game_phase_changed"  # 游戏阶段变更
+    NEXT_STAGE = "next_stage"  # 进入下一阶段
     
     # 剧本生成相关
     GENERATE_SCRIPT = "generate_script"
@@ -112,6 +118,14 @@ class GenerateScriptData(BaseModel):
     ai_dm_personality: str = Field(..., min_length=1, max_length=100)
     duration_mins: int = Field(..., gt=0, le=480)
 
+class NextStageData(BaseModel):
+    """进入下一阶段数据"""
+    pass
+
+class RequestGameStatusData(BaseModel):
+    """请求游戏状态数据"""
+    pass
+
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
     MessageType.CHAT: ChatMessageData,
@@ -122,7 +136,9 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.PRIVATE_MESSAGE: PrivateMessageData,
     MessageType.GAME_VOTE: GameVoteData,
     MessageType.UPDATE_ROOM_SETTINGS: UpdateRoomSettingsData,
-    MessageType.GENERATE_SCRIPT: GenerateScriptData,
+    MessageType.GENERATE_SCRIPT: None,  # 生成剧本不需要额外数据，使用空数据模型
+    MessageType.SEARCH_BEGIN: None,  # 搜证开始不需要额外数据，使用空数据模型
+    MessageType.SEARCH_END: None,  # 搜证结束不需要额外数据，使用空数据模型
 }
 
 # 发出消息类型映射 - 使用标准格式
@@ -130,7 +146,6 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.CONNECTED: dict,
     MessageType.ERROR: dict,
     MessageType.ROOM_STATUS: dict,
-    MessageType.GAME_STATUS: dict,
     MessageType.ROOM_SETTINGS_UPDATED: dict,
     MessageType.PLAYER_JOINED: dict,
     MessageType.PLAYER_LEFT: dict,
@@ -140,6 +155,7 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.PLAYER_READY: dict,
     MessageType.ALL_READY: dict,
     MessageType.GAME_STARTED: dict,
+    
     MessageType.STAGE_CHANGED: dict,
     MessageType.PLAYER_ACTION: dict,
     MessageType.VOTE_STARTED: dict,
@@ -156,7 +172,7 @@ def create_message(message_type: MessageType, data: Any = None) -> Dict[str, Any
     from datetime import datetime
     
     # 对于状态类消息，保持原有data结构
-    if message_type in [MessageType.ROOM_STATUS, MessageType.GAME_STATUS]:
+    if message_type in [MessageType.ROOM_STATUS]:
         return {
             "type": message_type.value,
             "data": data
@@ -203,7 +219,7 @@ def create_success_message(message_type: MessageType, data: Any) -> Dict[str, An
     return create_message(message_type, data)
 
 # 消息验证函数
-def validate_incoming_message(message_type: str, data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+def validate_incoming_message(message_type: str, data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """验证接收到的消息格式"""
     try:
         msg_type = MessageType(message_type)
@@ -213,7 +229,8 @@ def validate_incoming_message(message_type: str, data: Dict[str, Any]) -> tuple[
         data_class = INCOMING_MESSAGE_TYPES[msg_type]
         try:
             # 使用pydantic进行数据验证
-            data_class.parse_obj(data)
+            if hasattr(data_class, 'parse_obj'):
+                data_class.parse_obj(data)
             return True, None
         except Exception as e:
             return False, f"数据格式错误: {str(e)}"
@@ -227,9 +244,19 @@ def parse_incoming_message(message_type: str, data: Dict[str, Any]) -> Any:
         msg_type = MessageType(message_type)
         if msg_type in INCOMING_MESSAGE_TYPES:
             data_class = INCOMING_MESSAGE_TYPES[msg_type]
-            return data_class.parse_obj(data)
+            if hasattr(data_class, 'parse_obj'):
+                return data_class.parse_obj(data)
+            else:
+                # 对于普通dict类型，直接返回数据
+                return {}
+        elif message_type == MessageType.NEXT_STAGE.value:
+            return NextStageData()
+        elif message_type == MessageType.REQUEST_GAME_STATUS.value:
+            return RequestGameStatusData()
+        
         return None
-    except Exception:
+    except Exception as e:
+        print(f"解析消息数据失败: {str(e)}")
         return None
 
 

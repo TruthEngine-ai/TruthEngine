@@ -4,8 +4,8 @@ from datetime import datetime
 from tortoise.exceptions import DoesNotExist
 
 from model.entity.Scripts import GameRooms, GamePlayers, GameLogs, ScriptCharacters
-from .connection_manager import manager
-from .notification_types import (
+from websocket.connection_manager import manager
+from model.ws.notification_types import (
     MessageType, create_message, create_error_message, create_formatted_data
 )
 
@@ -23,7 +23,13 @@ class GameHandler:
             MessageType.PRIVATE_MESSAGE.value: self.handle_private_message,
             MessageType.GAME_VOTE.value: self.handle_game_vote,
             MessageType.UPDATE_ROOM_SETTINGS.value: self.handle_update_room_settings,
-            MessageType.GENERATE_SCRIPT.value: self.handle_generate_script
+            MessageType.GENERATE_SCRIPT.value: self.handle_generate_script,
+            MessageType.NEXT_STAGE.value: self.handle_next_stage,
+            
+            # 线索相关： 公开搜查到的线索
+            MessageType.SEARCH_BEGIN.value: self.handle_search_begin,
+            MessageType.SEARCH_END.value: self.handle_search_end
+            # 开始搜证
         }
         
         handler = handlers.get(message_type)
@@ -69,7 +75,7 @@ class GameHandler:
         """处理角色选择"""
         try:
             room = await GameRooms.get(room_code=room_code)
-            player = await GamePlayers.get(room=room, user_id=user_id)
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
             character_id = data.get("character_id")
             
             if character_id:
@@ -93,15 +99,15 @@ class GameHandler:
                 # 通知房间内所有用户
                 await manager.broadcast_to_room(room_code, create_message(MessageType.CHARACTER_SELECTED,
                     create_formatted_data(
-                        message=f"玩家选择了角色：{character.name}",
+                        message=f"玩家{player.user.nickname}  选择了角色：{character.name}",
                         send_id=None,
                         send_nickname="系统"
                     )
                 ))
                 
                 # 广播房间状态更新
-                from .websocket_routes import broadcast_room_status
-                await broadcast_room_status(room_code)
+                from .RoomStatusHandler import room_status_handler
+                await room_status_handler.broadcast_room_status(room_code)
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -129,8 +135,8 @@ class GameHandler:
             ))
             
             # 广播房间状态更新
-            from .websocket_routes import broadcast_room_status
-            await broadcast_room_status(room_code)
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
             
             # 检查是否所有玩家都准备好了
             all_players = await GamePlayers.filter(room=room).prefetch_related('character')
@@ -192,6 +198,157 @@ class GameHandler:
                     send_nickname="系统"
                 )
             ))
+            
+            # 广播房间状态更新
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
+            
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间不存在"), 
+                user_id
+            )
+            
+    async def handle_search_begin(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理开始搜证"""
+        try:
+            room = await GameRooms.get(room_code=room_code).prefetch_related('script__stages')
+            
+            # 检查是否是房主
+            if room.host_user_id != user_id:
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以开始搜证"), 
+                    user_id
+                )
+                return
+            
+            
+            # 开始搜证
+            room.status = "搜证中"
+            await room.save()
+            
+            # 通知所有玩家游戏开始
+            await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_STARTED,
+                create_formatted_data(
+                    message=f"搜证开始！",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
+            
+            # 广播房间状态更新
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
+            
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间不存在"), 
+                user_id
+            )
+
+
+    async def handle_search_end(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理结束搜证"""
+        try:
+            room = await GameRooms.get(room_code=room_code).prefetch_related('script__stages')
+            
+            # 检查是否是房主
+            if room.host_user_id != user_id:
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以结束搜证"), 
+                    user_id
+                )
+                return
+            
+            
+            # 开始搜证
+            room.status = "进行中"
+            await room.save()
+            
+            # 通知所有玩家游戏开始
+            await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_STARTED,
+                create_formatted_data(
+                    message=f"搜证结束！",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ))
+            
+            # 广播房间状态更新
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
+            
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间不存在"), 
+                user_id
+            )
+
+
+    async def handle_next_stage(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理进入下一阶段"""
+        try:
+            room = await GameRooms.get(room_code=room_code).prefetch_related('script__stages', 'current_stage')
+            
+            # 检查是否是房主
+            if room.host_user_id != user_id:
+                await manager.send_personal_message(
+                    create_error_message("只有房主可以切换游戏阶段"), 
+                    user_id
+                )
+                return
+            
+            # 检查游戏状态
+            if room.status != "进行中":
+                await manager.send_personal_message(
+                    create_error_message("游戏未在进行中"), 
+                    user_id
+                )
+                return
+            
+            if not room.current_stage:
+                await manager.send_personal_message(
+                    create_error_message("当前阶段信息异常"), 
+                    user_id
+                )
+                return
+            
+            # 获取下一阶段
+            next_stage_number = room.current_stage.stage_number + 1
+            next_stage = await room.script.stages.filter(stage_number=next_stage_number).first()
+            
+            if not next_stage:
+                # 没有下一阶段，游戏结束
+                room.status = "投票中"
+                await room.save()
+                
+                await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_PHASE_CHANGED,
+                    create_formatted_data(
+                        message="所有阶段已完成，进入最终投票阶段！",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
+            else:
+                # 切换到下一阶段
+                room.current_stage = next_stage
+                await room.save()
+                
+                await manager.broadcast_to_room(room_code, create_message(MessageType.GAME_PHASE_CHANGED,
+                    create_formatted_data(
+                        message=f"进入新阶段：{next_stage.name}",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ))
+            
+            # 广播房间状态更新
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
+            
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -315,8 +472,8 @@ class GameHandler:
             ))
             
             # 广播房间状态更新
-            from .websocket_routes import broadcast_room_status
-            await broadcast_room_status(room_code)
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -324,7 +481,7 @@ class GameHandler:
                 user_id
             )
 
-    async def handle_generate_script(self, room_code: str, user_id: int, data: Dict[str, Any]):
+    async def handle_generate_script(self, room_code: str, user_id: int, data: Dict[str, Any] = None):
         """处理剧本生成请求"""
         try:
             room = await GameRooms.get(room_code=room_code)
@@ -354,15 +511,26 @@ class GameHandler:
                 )
                 return
             
+            game_setting = room.game_setting 
+            if not game_setting:
+                await manager.send_personal_message(
+                    create_error_message("房间未设置游戏参数，请先设置游戏参数"), 
+                    user_id
+                )
+                return
+                
             # 验证数据
             required_fields = ['theme', 'difficulty', 'ai_dm_personality', 'duration_mins']
             for field in required_fields:
-                if field not in data:
+                if field not in game_setting:
                     await manager.send_personal_message(
                         create_error_message(f"缺少必要参数: {field}"), 
                         user_id
                     )
                     return
+                
+            room.status = "生成剧本中"
+            await room.save()
             
             # 通知房间内所有用户剧本生成开始
             await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED,
@@ -373,9 +541,12 @@ class GameHandler:
                 )
             ))
             
+            from ..websocket.websocket_routes import broadcast_room_status
+            await broadcast_room_status(room_code)
+            
             # 异步调用剧本生成API
             import asyncio
-            asyncio.create_task(self._generate_script_async(room_code, user_id, data))
+            asyncio.create_task(self._generate_script_async(room_code, user_id, room.game_setting))
             
         except DoesNotExist:
             await manager.send_personal_message(
@@ -409,6 +580,7 @@ class GameHandler:
             
             # 将剧本关联到房间
             room.script_id = script_id
+            room.status = "选择角色"
             await room.save()
             
             # 获取生成的剧本信息
@@ -425,10 +597,18 @@ class GameHandler:
             ))
             
             # 广播房间状态更新
-            from .websocket_routes import broadcast_room_status
-            await broadcast_room_status(room_code)
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
             
         except Exception as e:
+            # 剧本生成失败时恢复房间状态
+            try:
+                room = await GameRooms.get(room_code=room_code)
+                room.status = "等待中"
+                await room.save()
+            except:
+                pass
+                
             # 通知房间内所有用户剧本生成失败
             await manager.broadcast_to_room(room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
                 create_formatted_data(

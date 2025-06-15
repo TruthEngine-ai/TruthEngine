@@ -3,7 +3,7 @@ from fastapi import WebSocket
 import json
 import asyncio
 from datetime import datetime
-from .notification_types import MessageType, create_message, create_formatted_data
+from model.ws.notification_types import MessageType, create_message, create_formatted_data
 from model.entity.Scripts import Users as UserModel
 
 class ConnectionManager:
@@ -71,8 +71,8 @@ class ConnectionManager:
         async def delayed_broadcast():
             await asyncio.sleep(0.1)  # 短暂延迟确保数据库操作完成
             try:
-                from .websocket_routes import broadcast_room_status
-                await broadcast_room_status(room_code)
+                from ..service.RoomStatusHandler import room_status_handler
+                await room_status_handler.broadcast_room_status(room_code)
             except Exception as e:
                 print(f"延迟广播房间状态失败: {str(e)}")
         
@@ -109,6 +109,7 @@ class ConnectionManager:
             # 清理断开的连接
             for user_id in disconnected_users:
                 await self.disconnect(user_id)
+
 
     def get_room_users(self, room_code: str) -> List[int]:
         """获取房间内的用户列表"""

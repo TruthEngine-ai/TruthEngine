@@ -19,9 +19,8 @@ from model.dto.RoomDto import (
     RoomListResponse, RoomDetailResponse, DeleteRoomResponse, CleanupRoomResponse
 )
 from .auth_api import get_current_user
-from models.database import User as UserModel
 from websocket.connection_manager import manager
-from websocket.notification_types import MessageType, create_message, create_formatted_data
+from model.ws.notification_types import MessageType, create_message, create_formatted_data
 
 router = APIRouter(prefix="/api/room", tags=["房间管理"])
 
@@ -71,7 +70,7 @@ async def get_or_create_guest_user() -> Users:
         return await get_or_create_guest_user()
 
 @router.post("/create", response_model=CreateRoomResponse)
-async def create_room(request: CreateRoomRequest, current_user: Annotated[UserModel, Depends(get_current_user)] ):
+async def create_room(request: CreateRoomRequest, current_user: Annotated[Users, Depends(get_current_user)] ):
     """创建房间"""
     try:
         # 生成唯一房间码
@@ -123,7 +122,7 @@ async def create_room(request: CreateRoomRequest, current_user: Annotated[UserMo
         raise HTTPException(status_code=500, detail=f"创建房间失败: {str(e)}")
 
 @router.post("/join", response_model=JoinRoomResponse)
-async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel, Depends(get_current_user)] ):
+async def join_room(request: JoinRoomRequest, current_user: Annotated[Users, Depends(get_current_user)] ):
     """用户加入游戏房间"""
     try:
         # 查找房间
@@ -180,7 +179,7 @@ async def join_room(request: JoinRoomRequest, current_user: Annotated[UserModel,
         raise HTTPException(status_code=500, detail=f"加入房间失败: {str(e)}")
 
 @router.post("/leave", response_model=LeaveRoomResponse)
-async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(get_current_user)]):
+async def leave_room(room_code: str, current_user: Annotated[Users, Depends(get_current_user)]):
     """退出房间"""
     try:
         room = await GameRooms.get(room_code=room_code)
@@ -198,6 +197,8 @@ async def leave_room(room_code: str, current_user: Annotated[UserModel, Depends(
         #     "user_id": current_user.id,
         #     "nickname": current_user.nickname
         # }))
+        
+        
         
         # 删除玩家记录
         await player.delete()
@@ -293,7 +294,7 @@ async def get_room_list(page: int = 1, page_size: int = 20, status: Optional[str
         raise HTTPException(status_code=500, detail=f"获取房间列表失败: {str(e)}")
 
 @router.delete("/delete/{room_code}", response_model=DeleteRoomResponse)
-async def delete_room(room_code: str,current_user: Annotated[UserModel, Depends(get_current_user)]):
+async def delete_room(room_code: str,current_user: Annotated[Users, Depends(get_current_user)]):
     """删除房间"""
     try:
         room = await GameRooms.get(room_code=room_code)
@@ -405,7 +406,7 @@ async def cleanup_expired_rooms():
 async def update_room_settings(
     room_code: str, 
     request: UpdateRoomSettingsRequest,
-    current_user: Annotated[UserModel, Depends(get_current_user)]
+    current_user: Annotated[Users, Depends(get_current_user)]
 ):
     """修改房间设置"""
     try:

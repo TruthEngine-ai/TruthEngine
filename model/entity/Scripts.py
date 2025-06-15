@@ -44,6 +44,8 @@ class Scripts(BaseModel):
         choices=[('草稿', '草稿'), ('发布', '发布'), ('下架', '下架')],
         default='草稿'
     )
+    solution = fields.JSONField(null=True)
+    overview = fields.TextField(null=True)
 
     class Meta:
         table = "scripts"
@@ -55,6 +57,7 @@ class ScriptStages(BaseModel):
     name = fields.CharField(max_length=100)
     opening_narrative = fields.TextField()
     stage_goal = fields.TextField()
+    is_evidence = fields.BooleanField(default=False)
 
     class Meta:
         table = "script_stages"
@@ -81,7 +84,8 @@ class CharacterStageGoals(BaseModel):
     stage = fields.ForeignKeyField('models.ScriptStages', related_name='character_goals')
     goal_description = fields.TextField()
     is_mandatory = fields.BooleanField(default=False)
-
+    search_attempts = fields.IntField(default=1) #当前阶段可搜查次数
+    
     class Meta:
         table = "character_stage_goals"
         unique_together = [('character', 'stage')]
@@ -94,7 +98,9 @@ class ScriptClues(BaseModel):
     discovery_stage = fields.ForeignKeyField('models.ScriptStages', related_name='discoverable_clues', null=True)
     discovery_location = fields.CharField(max_length=100)
     is_public = fields.BooleanField(default=False)
-
+    character = fields.ForeignKeyField('models.ScriptCharacters', related_name='character_clus', null=True)
+    clue_goal_connection = fields.TextField()
+    # game_status = fields.JSONField(null=True)  # 用于存储游戏状态相关信息
     class Meta:
         table = "script_clues"
 
@@ -107,7 +113,7 @@ class GameRooms(BaseModel):
     game_setting=fields.JSONField(null=True)
     status = fields.CharField(
         max_length=10,
-        choices=[('等待中', '等待中'), ('进行中', '进行中'), ('投票中', '投票中'), 
+        choices=[('等待中', '等待中'), ('生成剧本中', '生成剧本中'), ('选择角色', '选择角色'), ('进行中', '进行中'), ('投票中', '投票中'), 
                 ('已结束', '已结束'), ('已解散', '已解散')],
         default='等待中'
     )
@@ -142,13 +148,17 @@ class GameLogs(BaseModel):
     is_ai_sender = fields.BooleanField(default=False)
     message_type = fields.CharField(
         max_length=20,
-        choices=[('公共聊天', '公共聊天'), ('私聊', '私聊'), ('AI旁白', 'AI旁白'), 
+        choices=[('系统消息', '系统消息'),('公共聊天', '公共聊天'), ('私聊', '私聊'), ('AI旁白', 'AI旁白'), 
                 ('行动宣告', '行动宣告'), ('线索发布', '线索发布')]
     )
     content = fields.TextField()
     recipient_game_player = fields.ForeignKeyField('models.GamePlayers', related_name='received_messages', null=True)
     related_clue = fields.ForeignKeyField('models.ScriptClues', related_name='related_logs', null=True)
     timestamp = fields.DatetimeField(auto_now_add=True)
+    send_id = fields.IntField(null=True)  # 发送者ID，
+    send_nickname = fields.CharField(max_length=100, null=True)  # 发送者昵称，
+    recipient_id = fields.IntField(null=True)  # 接收者ID，用于私聊消息
+    recipient_nickname = fields.CharField(max_length=100, null=True)  # 接收者昵称，用于私聊消息
 
     class Meta:
         table = "game_logs"
@@ -162,3 +172,28 @@ class GameVotes(BaseModel):
 
     class Meta:
         table = "game_votes"
+
+
+class SearchActions(BaseModel):
+    """搜查行动记录表"""
+    game_player = fields.ForeignKeyField('models.GamePlayers', related_name='game_script_player')
+    searchable_player = fields.ForeignKeyField('models.GamePlayers', related_name='game_script_searcher')
+    
+    clues_found = fields.ForeignKeyField('models.ScriptClues', related_name='found_in_searches')  # 找到的线索
+    is_public = fields.BooleanField(default=False)  # 是否公开找到的线索
+    stage = fields.ForeignKeyField('models.ScriptStages', related_name='search_actions', null=True)  # 所属阶段
+    
+    class Meta:
+        table = "game_script_search"
+        
+        
+class ScriptTimeline(BaseModel):
+    """剧本时间线表"""
+    script = fields.ForeignKeyField('models.Scripts', related_name='timeline_events')
+    event_description = fields.TextField(null=True) # 事件描述
+    sys_description = fields.TextField(null=True)  # 系统描述
+    character = fields.ForeignKeyField('models.ScriptCharacters', related_name='timeline_events', null=True)
+    is_public = fields.BooleanField(default=False)  # 是否公开事件
+    
+    class Meta:
+        table = "script_timeline"
