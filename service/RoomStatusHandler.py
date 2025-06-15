@@ -27,13 +27,14 @@ class RoomStatusHandler:
             
             # 根据房间状态组装不同的数据
             room_status_data = await self._build_room_status_by_phase(room, base_room_info, user_id)
-            
+
             await manager.send_personal_message(
                 create_message(MessageType.ROOM_STATUS, room_status_data), 
                 user_id
             )
             
         except Exception as e:
+            print(f"获取房间状态失败: {str(e)}")
             await manager.send_personal_message(
                 create_error_message(f"获取房间状态失败: {str(e)}"),
                 user_id
@@ -141,6 +142,7 @@ class RoomStatusHandler:
             status_data["characters"] = await self._build_detailed_characters_info(room, user_id)
             status_data["current_stage"] = await self._build_stage_info(room, user_id)
             status_data["search_info"] = await self._build_searchable_info(room, user_id)
+
         
         elif room.status == "投票中":
             # 投票阶段：返回投票相关信息
@@ -382,7 +384,7 @@ class RoomStatusHandler:
             search_actions = await SearchActions.filter(
                 game_player=current_player,
                 stage__stage_number__lte=room.current_stage.stage_number
-            ).prefetch_related('clues_found', 'clues_found__discovery_stage', 'stage').order_by('stage__stage_number').all()
+            ).prefetch_related('clues_found', 'clues_found__discovery_stage', 'stage','searchable_player__character').order_by('stage__stage_number').all()
             
             for action in search_actions:
                 if action.clues_found:
@@ -395,7 +397,7 @@ class RoomStatusHandler:
                         # "clue_goal_connection": action.clues_found.clue_goal_connection,
                         "discovery_stage": action.stage.name if action.stage else "未知阶段",
                         "stage_number": action.stage.stage_number if action.stage else 0,
-                        "searched_from": action.searchable_player.user.nickname if action.searchable_player else "未知",
+                        "searched_from": action.searchable_player.character.name if action.searchable_player else "未知",
                         "is_public_search": action.is_public
                     }
                     
@@ -581,8 +583,8 @@ class RoomStatusHandler:
             search_actions = await SearchActions.filter(
                 game_player=current_player,
                 stage__stage_number__lte=room.current_stage.stage_number
-            ).prefetch_related('clues_found', 'clues_found__discovery_stage', 'stage', 'searchable_player__user').order_by('stage__stage_number').all()
-            
+            ).prefetch_related('clues_found', 'clues_found__discovery_stage', 'stage', 'searchable_player__user','searchable_player__character').order_by('stage__stage_number').all()
+
             for action in search_actions:
                 if action.clues_found:
                     clue_info = {
@@ -602,7 +604,6 @@ class RoomStatusHandler:
         
         # 获取其他角色的未拥有线索（不包含具体内容，只显示线索名称和来源）
         available_clues = []
-        
         
         # 获取当前阶段及之前所有阶段的所有线索（按角色分组）
         for searchable_char in searchable_characters:
@@ -657,7 +658,6 @@ class RoomStatusHandler:
             ).first()
             if stage_goal:
                 search_attempts_left = stage_goal.search_attempts
-        
         return {
             "searchable_characters": searchable_characters,
             "available_clues": available_clues,

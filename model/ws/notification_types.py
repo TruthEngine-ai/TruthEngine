@@ -45,6 +45,8 @@ class MessageType(str, Enum):
     VOTE_STARTED = "vote_started"
     VOTE_UPDATED = "vote_updated"
     VOTE_ENDED = "vote_ended"
+    START_VOTE = "start_vote"  # 开启投票
+    END_VOTE = "end_vote"  # 结束投票
     
     # 线索相关
     CLUE_DISCOVERED = "clue_discovered"
@@ -102,8 +104,15 @@ class PrivateMessageData(BaseModel):
 
 class GameVoteData(BaseModel):
     """游戏投票数据"""
-    vote_type: str = Field(..., min_length=1)
-    option: str = Field(..., min_length=1)
+    voted_user_id: int = Field(..., gt=0)  # 被投票的用户ID
+
+class StartVoteData(BaseModel):
+    """开启投票数据"""
+    pass
+
+class EndVoteData(BaseModel):
+    """结束投票数据"""
+    pass
 
 class UpdateRoomSettingsData(BaseModel):
     """更新房间设置数据"""
@@ -136,6 +145,8 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.PLAYER_ACTION: PlayerActionData,
     MessageType.PRIVATE_MESSAGE: PrivateMessageData,
     MessageType.GAME_VOTE: GameVoteData,
+    MessageType.START_VOTE: None,
+    MessageType.END_VOTE: None,
     MessageType.UPDATE_ROOM_SETTINGS: UpdateRoomSettingsData,
     MessageType.GENERATE_SCRIPT: None,  # 生成剧本不需要额外数据，使用空数据模型
     MessageType.SEARCH_BEGIN: None,  # 搜证开始不需要额外数据，使用空数据模型
@@ -168,6 +179,8 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.SCRIPT_GENERATION_STARTED: dict,
     MessageType.SCRIPT_GENERATION_COMPLETED: dict,
     MessageType.SCRIPT_GENERATION_FAILED: dict,
+    MessageType.START_VOTE: dict,
+    MessageType.END_VOTE: dict,
 }
 
 def create_message(message_type: MessageType, data: Any = None) -> Dict[str, Any]:
