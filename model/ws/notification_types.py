@@ -53,6 +53,7 @@ class MessageType(str, Enum):
     #搜证相关
     SEARCH_BEGIN = "search_begin"
     SEARCH_END = "search_end"
+    SEARCH_SCRIPT_CLUE = "search_script_clue"
     
     # AI DM相关
     AI_MESSAGE = "ai_message"
@@ -118,13 +119,13 @@ class GenerateScriptData(BaseModel):
     ai_dm_personality: str = Field(..., min_length=1, max_length=100)
     duration_mins: int = Field(..., gt=0, le=480)
 
-class NextStageData(BaseModel):
-    """进入下一阶段数据"""
-    pass
-
 class RequestGameStatusData(BaseModel):
     """请求游戏状态数据"""
     pass
+
+class SearchScriptClueData(BaseModel):
+    """搜查线索数据"""
+    clue_id: int = Field(..., gt=0)
 
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
@@ -139,6 +140,8 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.GENERATE_SCRIPT: None,  # 生成剧本不需要额外数据，使用空数据模型
     MessageType.SEARCH_BEGIN: None,  # 搜证开始不需要额外数据，使用空数据模型
     MessageType.SEARCH_END: None,  # 搜证结束不需要额外数据，使用空数据模型
+    MessageType.SEARCH_SCRIPT_CLUE: SearchScriptClueData,  # 搜查线索需要线索ID
+    MessageType.NEXT_STAGE: None,
 }
 
 # 发出消息类型映射 - 使用标准格式

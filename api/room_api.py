@@ -87,7 +87,8 @@ async def create_room(request: CreateRoomRequest, current_user: Annotated[Users,
                 "theme": "",
                 "difficulty":  "", 
                 "ai_dm_personality": "",
-                "duration_mins": 0
+                "duration_mins": 0,
+                "special_rules": ""
             }
         
         # 创建房间
@@ -96,7 +97,7 @@ async def create_room(request: CreateRoomRequest, current_user: Annotated[Users,
             room_password=request.room_password or "",
             host_user=current_user,
             ai_dm_personality=request.ai_dm_personality,
-            player_count_max=request.player_count_max,
+            max_players=request.player_count_max,
             game_setting=game_setting
         )
         

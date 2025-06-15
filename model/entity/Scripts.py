@@ -45,7 +45,8 @@ class Scripts(BaseModel):
         default='草稿'
     )
     solution = fields.JSONField(null=True)
-    overview = fields.TextField(null=True)
+    overview = fields.TextField(null=True)  # 剧本概览信息
+    
 
     class Meta:
         table = "scripts"
@@ -99,7 +100,7 @@ class ScriptClues(BaseModel):
     discovery_location = fields.CharField(max_length=100)
     is_public = fields.BooleanField(default=False)
     character = fields.ForeignKeyField('models.ScriptCharacters', related_name='character_clus', null=True)
-    clue_goal_connection = fields.TextField()
+    clue_goal_connection = fields.TextField(null=True)  # 线索与角色目标的关联描述
     # game_status = fields.JSONField(null=True)  # 用于存储游戏状态相关信息
     class Meta:
         table = "script_clues"
@@ -189,11 +190,10 @@ class SearchActions(BaseModel):
         
 class ScriptTimeline(BaseModel):
     """剧本时间线表"""
-    script = fields.ForeignKeyField('models.Scripts', related_name='timeline_events')
     event_description = fields.TextField(null=True) # 事件描述
     sys_description = fields.TextField(null=True)  # 系统描述
+    script = fields.ForeignKeyField('models.Scripts', related_name='timeline_events')
     character = fields.ForeignKeyField('models.ScriptCharacters', related_name='timeline_events', null=True)
     is_public = fields.BooleanField(default=False)  # 是否公开事件
-    
     class Meta:
         table = "script_timeline"

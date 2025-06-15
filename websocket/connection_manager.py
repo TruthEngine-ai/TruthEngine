@@ -55,7 +55,7 @@ class ConnectionManager:
                     # 通知房间内其他用户有用户离开
                     await self.broadcast_to_room(room_code, create_message(MessageType.PLAYER_LEFT,
                         create_formatted_data(
-                            message=f"用户 {user.nickname} 离开了房间",
+                            message=f"用户 {user.nickname} 离线",
                             send_id=None,
                             send_nickname="系统"
                         )
@@ -71,7 +71,7 @@ class ConnectionManager:
         async def delayed_broadcast():
             await asyncio.sleep(0.1)  # 短暂延迟确保数据库操作完成
             try:
-                from ..service.RoomStatusHandler import room_status_handler
+                from service.RoomStatusHandler import room_status_handler
                 await room_status_handler.broadcast_room_status(room_code)
             except Exception as e:
                 print(f"延迟广播房间状态失败: {str(e)}")

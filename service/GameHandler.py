@@ -3,16 +3,76 @@ from typing import Dict, Any
 from datetime import datetime
 from tortoise.exceptions import DoesNotExist
 
-from model.entity.Scripts import GameRooms, GamePlayers, GameLogs, ScriptCharacters
+from model.entity.Scripts import GameRooms, GamePlayers, GameLogs, ScriptCharacters,ScriptClues
 from websocket.connection_manager import manager
 from model.ws.notification_types import (
     MessageType, create_message, create_error_message, create_formatted_data
 )
+from utils.game_log_util import game_log_util
 
 class GameHandler:
     async def handle_message(self, websocket, room_code: str, user_id: int, message: Dict[str, Any]):
         """处理游戏消息"""
         message_type = message.get("type")
+        
+        # 根据消息类型记录日志
+        try:
+            room = await GameRooms.get(room_code=room_code)
+            player = None
+            
+            # 获取发送消息的玩家信息
+            try:
+                player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
+            except DoesNotExist:
+                pass
+            
+            # 根据不同消息类型记录相应日志
+            if message_type in [
+                MessageType.READY.value, 
+                MessageType.SELECT_CHARACTER.value, 
+                MessageType.START_GAME.value,
+                MessageType.UPDATE_ROOM_SETTINGS.value,
+                MessageType.GENERATE_SCRIPT.value,
+                MessageType.NEXT_STAGE.value,
+                MessageType.SEARCH_BEGIN.value,
+                MessageType.SEARCH_END.value,
+                MessageType.SEARCH_SCRIPT_CLUE.value
+            ]:
+                # 系统消息类型
+                await game_log_util.create_system_log(
+                    room=room,
+                    content=f"用户 {player.user.nickname if player else user_id} 执行了操作：{message_type}",
+                    player=player
+                )
+            elif message_type == MessageType.CHAT.value:
+                # 公共聊天
+                if player:
+                    await game_log_util.create_chat_log(
+                        room=room,
+                        sender_player=player,
+                        content=message.get("data", {}).get("message", "")
+                    )
+            elif message_type == MessageType.PRIVATE_MESSAGE.value:
+                # 私聊消息 - 在具体处理方法中记录，因为需要接收者信息
+                pass
+            elif message_type == MessageType.GAME_VOTE.value:
+                # 投票行动
+                if player:
+                    await game_log_util.create_action_log(
+                        room=room,
+                        player=player,
+                        action_content=f"进行投票操作"
+                    )
+            elif message_type == MessageType.PLAYER_ACTION.value:
+                # 玩家行动
+                if player:
+                    await game_log_util.create_action_log(
+                        room=room,
+                        player=player,
+                        action_content=message.get("data", {}).get("action", "")
+                    )
+        except Exception as e:
+            print(f"记录游戏日志失败: {str(e)}")
         
         handlers = {
             MessageType.CHAT.value: self.handle_chat,
@@ -28,8 +88,10 @@ class GameHandler:
             
             # 线索相关： 公开搜查到的线索
             MessageType.SEARCH_BEGIN.value: self.handle_search_begin,
-            MessageType.SEARCH_END.value: self.handle_search_end
+            MessageType.SEARCH_END.value: self.handle_search_end,
+            MessageType.SEARCH_SCRIPT_CLUE.value: self.handle_search_script_clue,
             # 开始搜证
+            
         }
         
         handler = handlers.get(message_type)
@@ -45,15 +107,7 @@ class GameHandler:
         """处理聊天消息"""
         try:
             room = await GameRooms.get(room_code=room_code)
-            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
-            
-            # 保存聊天记录
-            await GameLogs.create(
-                room=room,
-                sender_game_player=player,
-                message_type="公共聊天",
-                content=data.get("message", "")
-            )
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user','character')
             
             # 广播消息给房间内所有用户
             nickname = player.character.name+f"({player.user.nickname})" if player.character else player.user.nickname
@@ -364,12 +418,11 @@ class GameHandler:
             recipient_id = data.get("recipient_id")
             recipient = await GamePlayers.get(room=room, user_id=recipient_id).prefetch_related('user')
             
-            # 保存私聊记录
-            await GameLogs.create(
+            # 使用工具类记录私聊日志
+            await game_log_util.create_private_chat_log(
                 room=room,
-                sender_game_player=sender,
-                recipient_game_player=recipient,
-                message_type="私聊",
+                sender_player=sender,
+                recipient_player=recipient,
                 content=data.get("message", "")
             )
             
@@ -395,14 +448,6 @@ class GameHandler:
         try:
             room = await GameRooms.get(room_code=room_code)
             player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user')
-            
-            # 保存行动记录
-            await GameLogs.create(
-                room=room,
-                sender_game_player=player,
-                message_type="行动宣告",
-                content=data.get("action", "")
-            )
             
             # 广播行动给房间内所有用户
             await manager.broadcast_to_room(room_code, create_message(MessageType.PLAYER_ACTION,
@@ -520,7 +565,7 @@ class GameHandler:
                 return
                 
             # 验证数据
-            required_fields = ['theme', 'difficulty', 'ai_dm_personality', 'duration_mins']
+            required_fields = ['theme', 'difficulty', 'ai_dm_personality', 'duration_mins','special_rules']
             for field in required_fields:
                 if field not in game_setting:
                     await manager.send_personal_message(
@@ -541,7 +586,7 @@ class GameHandler:
                 )
             ))
             
-            from ..websocket.websocket_routes import broadcast_room_status
+            from websocket.websocket_routes import broadcast_room_status
             await broadcast_room_status(room_code)
             
             # 异步调用剧本生成API
@@ -574,10 +619,21 @@ class GameHandler:
             
             # 调用 AI 接口生成剧本
             ai_response = await call_ai_api(user_prompt)
-            
+            # ai_response = None
+            # # 保存AI响应到test.json文件
+            # with open("test.json", "w", encoding="utf-8") as f:
+            #     f.write(ai_response)
+                
+            # 从文件读取AI响应用于测试
+            try:
+                with open("test.json", "r", encoding="utf-8") as f:
+                    ai_response = f.read()
+            except FileNotFoundError:
+                raise Exception("test.json文件不存在")
+            except Exception as e:
+                raise Exception(f"读取test.json文件失败: {str(e)}")
             # 解析并保存到数据库
             script_id = await parse_and_save_script(ai_response, user_id, room.max_players, data["duration_mins"])
-            
             # 将剧本关联到房间
             room.script_id = script_id
             room.status = "选择角色"
@@ -602,6 +658,7 @@ class GameHandler:
             
         except Exception as e:
             # 剧本生成失败时恢复房间状态
+            print(f"剧本生成失败: {str(e)}")
             try:
                 room = await GameRooms.get(room_code=room_code)
                 room.status = "等待中"
@@ -617,6 +674,158 @@ class GameHandler:
                     send_nickname="系统"
                 )
             ))
+            
+             # 广播房间状态更新
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.broadcast_room_status(room_code)
+
+    async def handle_search_script_clue(self, room_code: str, user_id: int, data: Dict[str, Any]):
+        """处理搜查线索"""
+        try:
+            from model.entity.Scripts import SearchActions, CharacterStageGoals
+            
+            room = await GameRooms.get(room_code=room_code).prefetch_related('current_stage', 'script')
+            player = await GamePlayers.get(room=room, user_id=user_id).prefetch_related('user', 'character')
+            
+            # 检查房间状态
+            if room.status != "搜证中":
+                await manager.send_personal_message(
+                    create_error_message("当前不在搜证阶段"), 
+                    user_id
+                )
+                return
+            
+            # 检查用户是否有角色
+            if not player.character:
+                await manager.send_personal_message(
+                    create_error_message("用户未选择角色"), 
+                    user_id
+                )
+                return
+            
+            # 获取线索ID
+            clue_id = data.get("clue_id")
+            if not clue_id:
+                await manager.send_personal_message(
+                    create_error_message("缺少线索ID"), 
+                    user_id
+                )
+                return
+            
+            # 验证线索是否存在且属于当前剧本
+   
+            try:
+                clue = await ScriptClues.get(id=clue_id, script=room.script) .prefetch_related('character', 'discovery_stage')
+            except DoesNotExist:
+                await manager.send_personal_message(
+                    create_error_message("线索不存在或不属于当前剧本"), 
+                    user_id
+                )
+                return
+            
+            # 检查线索是否可在当前阶段搜查
+            if clue.discovery_stage and clue.discovery_stage.stage_number > room.current_stage.stage_number:
+                await manager.send_personal_message(
+                    create_error_message("该线索在当前阶段不可搜查"), 
+                    user_id
+                )
+                return
+            
+            # 检查用户是否已经搜查过这个线索
+            existing_search = await SearchActions.filter(
+                game_player=player,
+                clues_found=clue
+            ).first()
+            
+            if existing_search:
+                await manager.send_personal_message(
+                    create_error_message("已经搜查过该线索"), 
+                    user_id
+                )
+                return
+            
+            # 获取当前用户在当前阶段的搜查次数限制
+            stage_goal = await CharacterStageGoals.filter(
+                character=player.character,
+                stage=room.current_stage
+            ).first()
+            
+            if not stage_goal or stage_goal.search_attempts <= 0:
+                await manager.send_personal_message(
+                    create_error_message("当前阶段搜查次数已用完"), 
+                    user_id
+                )
+                return
+            
+            # 找到线索的拥有者
+            searchable_player = None
+            if clue.character:
+                searchable_player = await GamePlayers.filter(
+                    room=room,
+                    character=clue.character
+                ).first()
+            
+            if not searchable_player:
+                await manager.send_personal_message(
+                    create_error_message("无法找到线索的拥有者"), 
+                    user_id
+                )
+                return
+            
+            # 创建搜查记录
+            search_action = await SearchActions.create(
+                game_player=player,
+                searchable_player=searchable_player,
+                clues_found=clue,
+                is_public=False,  # 默认为私有搜查，可以后续扩展为用户选择
+                stage=room.current_stage
+            )
+            
+            # 减少搜查次数
+            stage_goal.search_attempts -= 1
+            await stage_goal.save()
+            
+            # 记录搜查日志
+            await game_log_util.create_clue_log(
+                room=room,
+                player=player,
+                clue=clue,
+                content=f"搜查到线索：{clue.name}"
+            )
+            
+            # 通知用户搜查成功
+            await manager.send_personal_message(create_message(MessageType.CLUE_DISCOVERED,
+                create_formatted_data(
+                    message=f"成功搜查到线索：{clue.name}",
+                    send_id=None,
+                    send_nickname="系统"
+                )
+            ), user_id)
+            
+            # 如果是公开搜查，通知房间内所有用户
+            if search_action.is_public:
+                await manager.broadcast_to_room(room_code, create_message(MessageType.CLUE_DISCOVERED,
+                    create_formatted_data(
+                        message=f"{player.user.nickname} 公开搜查到线索：{clue.name}",
+                        send_id=None,
+                        send_nickname="系统"
+                    )
+                ), exclude_user=user_id)
+            
+            # 更新房间状态给当前用户
+            from .RoomStatusHandler import room_status_handler
+            await room_status_handler.send_room_status(room_code, user_id)
+            
+        except DoesNotExist:
+            await manager.send_personal_message(
+                create_error_message("房间或用户不存在"), 
+                user_id
+            )
+        except Exception as e:
+            await manager.send_personal_message(
+                create_error_message(f"搜查线索失败：{str(e)}"), 
+                user_id
+            )
 
 # 全局游戏处理器实例
 game_handler = GameHandler()

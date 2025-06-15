@@ -260,6 +260,8 @@ async def parse_and_save_script(ai_response: str, author_id: int, play_count:int
         # 解析 JSON
         script_data = json.loads(response_content)
         
+        # print(f"AI 响应内容: {script_data}")  # 调试输出，查看 AI 返回的内容
+        
         async with in_transaction():
             # 验证作者存在
             author = await Users.get(id=author_id)
@@ -278,6 +280,7 @@ async def parse_and_save_script(ai_response: str, author_id: int, play_count:int
                 overview=script_data["story"]["overview"], 
                 solution = script_data["solution"]
             )
+            
             
             # 创建故事阶段
             stages_map = {}
@@ -401,7 +404,6 @@ async def generate_script(request: CreateScriptRequest, current_user: Annotated[
         
         # 调用 AI 接口
         ai_response = await call_ai_api(user_prompt)
-
         print(f"AI Response: {ai_response}")
         # 解析并保存到数据库
         script_id = await parse_and_save_script(ai_response, current_user.id, room.max_players, request.duration_mins)
