@@ -1,0 +1,254 @@
+.message-drawer-floating-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+  border: none;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 50% !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+}
+
+.message-drawer-floating-button .ant-btn-icon {
+  font-size: 20px;
+}
+
+.message-drawer-chat-box {
+  position: fixed;
+  width: 360px;
+  height: 480px;
+  z-index: 1001;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.06);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-drawer-chat-box.dragging {
+  cursor: grabbing;
+}
+
+.message-drawer-chat-box:not(.dragging) {
+  cursor: default;
+}
+
+.message-drawer-chat-header {
+  padding: 16px 20px;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  border-bottom: none;
+}
+
+.message-drawer-chat-header.dragging {
+  cursor: grabbing;
+}
+
+.message-drawer-chat-header:not(.dragging) {
+  cursor: grab;
+}
+
+.message-drawer-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.message-drawer-header-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.message-drawer-header-title {
+  color: #fff;
+  font-size: 16px;
+}
+
+.message-drawer-header-badge {
+  margin-left: 8px;
+  background-color: rgba(255,255,255,0.2);
+}
+
+.message-drawer-header-button {
+  color: rgba(255,255,255,0.8);
+  margin-right: 4px;
+}
+
+.message-drawer-chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-drawer-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+.message-drawer-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.message-drawer-messages-list {
+  padding: 0 20px;
+}
+
+.message-drawer-message-item {
+  padding: 6px 0;
+  border: none;
+}
+
+.message-drawer-system-message-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.message-drawer-system-message {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: #666;
+  font-size: 12px;
+  text-align: center;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 16px;
+  margin: 12px auto;
+  max-width: 85%;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* 用户消息容器 */
+.message-drawer-user-message {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 自己发送的消息 - 右侧布局 */
+.message-drawer-user-message.own-message {
+  align-items: flex-end;
+}
+
+.message-drawer-user-message.own-message .message-drawer-message-header {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.message-drawer-user-message.own-message .message-drawer-header-content {
+  margin-right: 8px;
+  margin-left: 0;
+}
+
+.message-drawer-user-message.own-message .message-drawer-message-content {
+  margin-left: 0;
+  margin-right: 40px;
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.message-drawer-user-message.own-message .message-drawer-message-text {
+  color: #fff;
+}
+
+/* 他人发送的消息 - 左侧布局 */
+.message-drawer-user-message.other-message {
+  align-items: flex-start;
+}
+
+.message-drawer-user-message.other-message .message-drawer-header-content {
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.message-drawer-user-message.other-message .message-drawer-message-content {
+  margin-left: 40px;
+  margin-right: 0;
+  background-color: #fff;
+  color: #333;
+}
+
+.message-drawer-message-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+  max-width: 85%;
+}
+
+.message-drawer-avatar {
+  flex-shrink: 0;
+}
+
+.message-drawer-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-drawer-header-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.message-drawer-nickname {
+  font-size: 14px;
+}
+
+.message-drawer-time {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.message-drawer-message-content {
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  word-break: break-word;
+  line-height: 1.4;
+  max-width: 85%;
+}
+
+.message-drawer-message-text {
+  font-size: 14px;
+}
+
+.message-drawer-input-area {
+  padding: 16px 20px;
+  background: #fff;
+}
+
+.message-drawer-input-container {
+  display: flex;
+  gap: 8px;
+}
+
+.message-drawer-textarea {
+  resize: none;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.message-drawer-send-button {
+  border-radius: 8px;
+  height: auto;
+  min-height: 32px;
+  align-self: flex-end;
+}

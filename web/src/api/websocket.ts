@@ -6,42 +6,197 @@ export interface WebSocketMessage {
     timestamp?: string;
 }
 
+// 故事时间线事件
+export interface StoryTimelineEvent {
+    id: number;
+    event_description: string;
+    sys_description: string;
+    character_name: string;
+    is_public: boolean;
+    created_at: string;
+}
+
+// 故事时间线
+export interface StoryTimeline {
+    public: StoryTimelineEvent[];
+    private: StoryTimelineEvent[];
+}
+
+// 角色目标
+export interface CharacterGoal {
+    goal_description: string;
+    is_mandatory: boolean;
+    search_attempts: number;
+}
+
+// 游戏阶段
+export interface GameStage {
+    stage_number: number;
+    name: string;
+    opening_narrative: string;
+    stage_goal: string;
+    is_evidence: boolean;
+    is_current?: boolean;
+    character_goal?: CharacterGoal;
+}
+
+// 当前阶段
+export interface CurrentStage {
+    current_stage: GameStage;
+    all_stages: GameStage[];
+}
+
+// 线索
+export interface Clue {
+    id: number;
+    name: string;
+    description: string;
+    image_url: string | null;
+    discovery_location: string;
+    discovery_stage: string;
+    stage_number: number;
+    source: string;
+    searched_from?: string; // 搜查来源玩家昵称
+    is_public_search?: boolean; // 是否为公开搜查
+}
+
+// 线索集合
+export interface Clues {
+    public: Clue[];
+    private: Clue[];
+    searched: Clue[];
+    public_by_stage: Record<string, Clue[]>;
+    private_by_stage: Record<string, Clue[]>;
+    searched_by_stage: Record<string, Clue[]>;
+}
+
+// 投票数据
+export interface VoteData {
+    vote_id: number;
+    vote_type: string;
+    title: string;
+    description: string;
+    options: Array<{
+        character_id: number;
+        character_name: string;
+        vote_count: number;
+        voters: string[];
+    }>;
+    voted_character_id?: number;
+    is_active: boolean;
+}
+
+// 投票统计信息
+export interface VotingInfo {
+    vote_counts: Array<{
+        user_id: number;
+        nickname: string;
+        vote_count: number;
+    }>;
+    vote_details: Array<{
+        voter_user_id: number;
+        voted_user_id: number;
+        voter_nickname: string;
+        voted_nickname: string;
+        timestamp: string;
+    }>;
+    total_votes: number;
+}
+
+// 可搜查角色
+export interface SearchableCharacter {
+    user_id: number;
+    nickname: string;
+    character_name: string;
+    character_id: number;
+    is_online: boolean;
+}
+
+// 可搜查线索
+export interface AvailableClue {
+    description: string;
+    searched_from_character: string;
+    id: number;
+    name: string;
+    discovery_location: string;
+    discovery_stage: string;
+    stage_number: number;
+    owner_character: string;
+    owner_user_id: number;
+    owner_nickname: string;
+}
+
+// 搜查信息
+export interface SearchInfo {
+    searchable_characters: SearchableCharacter[];
+    available_clues: AvailableClue[];
+    owned_clues: AvailableClue[];
+    available_clues_by_stage: Record<string, AvailableClue[]>;
+    owned_clues_by_stage: Record<string, AvailableClue[]>;
+    search_attempts_left: number;
+}
+
 // 房间状态数据类型
 export interface RoomStatus {
     room: {
         code: string;
         status: string;
-        current_stage?: string;
-        ai_dm_personality: string;
         max_players: number;
+        host_user_id: number;
+        ai_dm_personality: string;
         game_settings?: {
             theme?: string;
             difficulty?: string;
-            ai_dm_personality?: string;
             duration_mins?: number;
+            ai_dm_personality?: string;
         };
+        started_at?: string;
+        finished_at?: string | null;
     };
     script?: {
         id: number;
         title: string;
         description: string;
+        player_count_min: number;
+        player_count_max: number;
+        duration_mins: number;
+        difficulty: string;
+        tags: string[];
+        overview: string;
+        total_stages: number;
     };
     players: Array<{
         user_id: number;
         nickname: string;
+        avatar_url?: string | null;
         character_name?: string;
         character_id?: number;
         is_ready: boolean;
         is_host: boolean;
         is_online: boolean;
+        is_alive?: boolean;
     }>;
-    characters: Array<{
-        id: number;
-        name: string;
+    characters?: Array<{
+        player_nickname: string;
+        character_name: string;
+        character_id: number;
         gender: string;
         public_info: string;
-        selected_by?: number;
+        is_alive: boolean;
+        is_self: boolean;
+        backstory?: string;
+        is_murderer?: boolean;
     }>;
+    story_timeline?: StoryTimeline;
+    current_stage?: CurrentStage;
+    clues?: Clues;
+    vote_data?: VoteData;
+    voting_info?: VotingInfo;
+    search_info?: SearchInfo;
+    solution?:{
+        answer:string;
+        reasoning:string;
+    }
 }
 
 export type EventListener = (data: any) => void;
@@ -181,8 +336,18 @@ export class GameWebSocket {
     }
 
     // 发送投票
-    sendVote(data: any): void {
-        this.send('game_vote', data);
+    sendVote(votedUserId: number): void {
+        this.send('game_vote', { voted_user_id: votedUserId });
+    }
+
+    // 开始投票
+    startVote(): void {
+        this.send('start_vote');
+    }
+
+    // 结束投票
+    endVote(): void {
+        this.send('end_vote');
     }
 
     // 更新房间设置
@@ -200,6 +365,21 @@ export class GameWebSocket {
         this.send('generate_script', null);
     }
 
+    // 进入下一幕
+    nextStage(): void {
+        this.send('next_stage', null);
+    }
+    searchBegin(): void {
+        this.send('search_begin', null);
+    }
+    searchEnd(): void {
+        this.send('search_end', null);
+    }
+    searchScriptClueData(settings: {
+        clue_id?: number;
+    }): void {
+        this.send('search_script_clue', settings);
+    }
     // 添加事件监听器
     on(event: string, listener: EventListener): void {
         if (!this.listeners.has(event)) {
@@ -253,7 +433,7 @@ export class GameWebSocket {
         console.log(`尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
         const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000); // 最大30秒
-        
+
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             if (!this.isManualClose && this.reconnectAttempts <= this.maxReconnectAttempts) {

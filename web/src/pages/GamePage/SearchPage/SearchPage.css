@@ -1,0 +1,342 @@
+.search-page {
+  min-height: 100vh;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #080808;
+  background-image: url('search_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  overflow: hidden;
+}
+
+.fog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.content-container {
+  position: relative;
+  z-index: 2;
+  padding: 20px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.page-title {
+  text-align: center;
+  margin-bottom: 40px !important;
+  color: #d1c3a9 !important;
+  font-family: 'Times New Roman', serif !important;
+  font-size: 3.5rem !important;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px rgba(255, 185, 65, 0.6), 0 0 20px rgba(255, 140, 0, 0.4);
+}
+
+.title-text {
+  position: relative;
+  display: inline-block;
+}
+
+.title-text:after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -10px;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #a22, #a22, transparent);
+}
+
+.instruction-text {
+  text-align: center;
+  color: #b4a89a !important;
+  font-size: 1.2rem !important;
+  margin-bottom: 30px !important;
+  font-style: italic;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+/* 角色选择部分 */
+.character-grid {
+  padding: 20px 0;
+}
+
+.character-card {
+  background: rgba(12, 10, 14, 0.75) !important;
+  border: 1px solid #453b33 !important;
+  border-radius: 8px !important;
+  transition: all 0.5s ease;
+  height: 100%;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.8);
+}
+
+.character-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(170, 50, 50, 0.2) !important;
+  border-color: #75503b !important;
+}
+
+.character-avatar {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #634832;
+  box-shadow: 0 0 15px rgba(155, 80, 40, 0.4);
+}
+
+.character-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(30%) contrast(120%);
+  transition: all 0.5s ease;
+}
+
+.character-card:hover .character-avatar img {
+  filter: sepia(10%) contrast(110%);
+}
+
+.character-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.8) 100%);
+  opacity: 0.7;
+  transition: opacity 0.5s ease;
+}
+
+.character-card:hover .character-glow {
+  opacity: 0.3;
+}
+
+.character-name {
+  color: #d5bfa7 !important;
+  text-align: center;
+  margin-bottom: 10px !important;
+  font-family: 'Georgia', serif !important;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.character-desc {
+  color: #a99985 !important;
+  text-align: center;
+  display: block;
+  font-style: italic;
+}
+
+/* 线索搜查部分 */
+.search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  border-bottom: 1px solid rgba(111, 82, 64, 0.4);
+  padding-bottom: 15px;
+}
+
+.back-button {
+  background: transparent !important;
+  border: 1px solid #634832 !important;
+  color: #c0a788 !important;
+  font-family: 'Georgia', serif !important;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: rgba(77, 38, 38, 0.4) !important;
+  border-color: #a47a55 !important;
+  color: #e3d5c3 !important;
+}
+
+.character-title {
+  margin: 0 !important;
+  color: #d1c3a9 !important;
+  flex-grow: 1;
+  text-align: center;
+  font-family: 'Times New Roman', serif !important;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.clues-container {
+  padding: 20px 0;
+}
+
+/* 线索卡片 */
+.clue-card-container {
+  perspective: 1500px;
+  height: 400px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.clue-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.6);
+}
+
+.clue-card-container.flipped .clue-card {
+  transform: rotateY(180deg);
+}
+
+.clue-card-front,
+.clue-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.clue-card-front {
+  background-image: url('https://i.imgur.com/KQBryJ0.jpg');
+  background-size: cover;
+  border: 1px solid #5a4a3a;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.clue-card-front:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(20, 14, 10, 0.6);
+  z-index: 0;
+}
+
+.clue-card-back {
+  background: #19150f;
+  border: 1px solid #634832;
+  transform: rotateY(180deg);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.clue-card-content {
+  position: relative;
+  z-index: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.clue-title {
+  color: #e5d6c0 !important;
+  margin-bottom: 15px !important;
+  text-align: center;
+  font-family: 'Georgia', serif !important;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.clue-brief {
+  color: #bfaf9a !important;
+  text-align: center;
+  display: block;
+  margin-bottom: 25px !important;
+  font-style: italic;
+}
+
+.clue-icon {
+  margin-top: auto;
+  color: #a89475;
+  font-size: 24px;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.clue-card-container:hover .clue-icon {
+  color: #d5c4ac;
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.clue-image {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  border: 1px solid #634832;
+  filter: sepia(20%);
+}
+
+.clue-title-full {
+  color: #e5d6c0 !important;
+  margin-bottom: 15px !important;
+  text-align: center;
+  font-family: 'Georgia', serif !important;
+}
+
+.clue-full-desc {
+  color: #c5b8a5 !important;
+  text-align: justify;
+  line-height: 1.6 !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .content-container {
+    padding: 10px 20px;
+  }
+  
+  .page-title {
+    font-size: 2.5rem !important;
+  }
+  
+  .clue-card-container {
+    height: 350px;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-title {
+    font-size: 2rem !important;
+  }
+  
+  .character-avatar {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+/* 动画效果 */
+@keyframes flickerAnimation {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0.4; }
+}
+
+.page-title {
+  animation: flickerAnimation 3s infinite;
+}

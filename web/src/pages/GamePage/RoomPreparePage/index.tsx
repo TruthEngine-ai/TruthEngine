@@ -17,13 +17,13 @@ import type { RoomPreparePageProps } from './types';
 
 const { Text } = Typography;
 
-const RoomPreparePage: React.FC<RoomPreparePageProps> = ({ 
-    roomCode, 
+const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
+    roomCode,
     isConnected = false,
     roomStatus = null,
-    setReady = () => {},
-    updateRoomSettings = () => {},
-    generateScript = () => {}
+    setReady = () => { },
+    updateRoomSettings = () => { },
+    generateScript = () => { }
 }) => {
     const { token } = theme.useToken();
     const [form] = Form.useForm();
@@ -88,7 +88,6 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
             return;
         }
         console.log('开始生成剧本，当前房间状态:', roomStatus?.room.status);
-        setGenerating(true); // 显示生成中的遮罩
         generateScript({
             theme: gameSettings?.theme || '',
             difficulty: gameSettings?.difficulty || '',
@@ -105,7 +104,7 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
                 playersCount: roomStatus.players.length,
                 script: roomStatus.script?.title
             });
-            
+
             // 当收到剧本生成完成或失败的消息时，关闭遮罩
             if (roomStatus.script || roomStatus.room.status === 'script_generated') {
                 setGenerating(false);

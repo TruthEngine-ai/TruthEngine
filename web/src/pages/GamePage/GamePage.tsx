@@ -9,15 +9,19 @@ import ScriptGeneratingMask from '../ScriptGeneratingMask';
 import MessageDrawer from '../../components/MessageDrawer';
 import CharacterSelectionPage from './CharacterSelectionPage/CharacterSelectionPage';
 import CorePage from './CorePage/CorePage';
+import VotePage from './VotePage/VotePage';
+import SearchPage from './SearchPage/SearchPage';
+import useIsMobile from '../../hooks/useIsMobile';
 
 const { Text } = Typography;
 
 const GamePage: React.FC = () => {
     const { token } = theme.useToken();
+    const isMobile = useIsMobile();
     const [searchParams] = useSearchParams();
     const roomCode = searchParams.get('room_code');
     const [isMessageWindowVisible, setMessageWindowVisible] = useState(false);
-    const { messages: wsMessages, isConnected, roomStatus, connect, setReady, updateRoomSettings, generateScript, selectCharacter, startGame } = useWebSocket(roomCode || 'UNKNOWN_ROOM_FOR_GAMEPAGE');
+    const { messages: wsMessages, isConnected, roomStatus, connect, setReady, updateRoomSettings, generateScript, selectCharacter, startGame, nextStage, sendVote, sendChat, searchBegin, searchEnd, searchScriptClueData } = useWebSocket(roomCode || 'UNKNOWN_ROOM_FOR_GAMEPAGE');
 
     // 房间状态检查相关状态
     const [checkingUserStatus, setCheckingUserStatus] = useState(true);
@@ -152,10 +156,16 @@ const GamePage: React.FC = () => {
                 justifyContent: 'center',
                 alignItems: 'center',
                 background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                padding: isMobile ? '16px' : '40px'
             }}>
                 {checkingUserStatus ? (
-                    <Card style={{ textAlign: 'center', padding: '40px' }}>
-                        <Text style={{ fontSize: '18px' }}>正在检查房间状态...</Text>
+                    <Card style={{
+                        textAlign: 'center',
+                        padding: isMobile ? '20px' : '40px',
+                        width: isMobile ? '100%' : 'auto',
+                        maxWidth: isMobile ? '320px' : 'none'
+                    }}>
+                        <Text style={{ fontSize: isMobile ? '16px' : '18px' }}>正在检查房间状态...</Text>
                     </Card>
                 ) : (
                     <Modal
@@ -164,6 +174,8 @@ const GamePage: React.FC = () => {
                         onCancel={handleCancelJoin}
                         footer={null}
                         destroyOnClose
+                        width={isMobile ? '90%' : 520}
+                        style={{ top: isMobile ? 20 : undefined }}
                     >
                         <div style={{ marginBottom: '20px' }}>
                             <Text>房间代码: <Text strong>{roomCode}</Text></Text>
@@ -218,9 +230,15 @@ const GamePage: React.FC = () => {
                 justifyContent: 'center',
                 alignItems: 'center',
                 background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                padding: isMobile ? '16px' : '40px'
             }}>
-                <Card style={{ textAlign: 'center', padding: '40px' }}>
-                    <Text style={{ fontSize: '18px' }}>
+                <Card style={{
+                    textAlign: 'center',
+                    padding: isMobile ? '20px' : '40px',
+                    width: isMobile ? '100%' : 'auto',
+                    maxWidth: isMobile ? '320px' : 'none'
+                }}>
+                    <Text style={{ fontSize: isMobile ? '16px' : '18px' }}>
                         {isConnected ? '正在加载房间信息...' : '正在连接房间...'}
                     </Text>
                 </Card>
@@ -248,7 +266,52 @@ const GamePage: React.FC = () => {
                     startGame={startGame}
                 />;
             case '进行中':
-                return <CorePage></CorePage>
+                return <CorePage
+                    roomStatus={roomStatus}
+                    onLeaveRoom={() => {
+                        window.location.href = '/';
+                    }}
+                    onNextStage={() => {
+                        nextStage();
+                    }}
+                    onSearchBegin={() => {
+                        searchBegin();
+                    }}
+                />
+            case '搜证中':
+                return <SearchPage
+                    roomStatus={roomStatus}
+                    onSearchEnd={() => {
+                        searchEnd();
+                    }}
+                    onSearchClue={(clueId) => {
+                        searchScriptClueData({ clue_id: clueId });
+                    }}
+                />
+            case '投票中':
+                return <VotePage
+                    roomStatus={roomStatus}
+                    voteData={roomStatus.vote_data}
+                    onVote={(targetCharacterId) => {
+                        sendVote(targetCharacterId);
+                    }}
+                    onLeaveRoom={() => {
+                        window.location.href = '/';
+                    }}
+                />
+            case '已结束':
+                return <CorePage
+                    roomStatus={roomStatus}
+                    onLeaveRoom={() => {
+                        window.location.href = '/';
+                    }}
+                    onNextStage={() => {
+                        nextStage();
+                    }}
+                    onSearchBegin={() => {
+                        searchBegin();
+                    }}
+                />
             default:
                 return <RoomPreparePage
                     roomCode={roomCode}
@@ -270,9 +333,13 @@ const GamePage: React.FC = () => {
                     left: 0,
                     right: 0,
                     zIndex: 1001,
-                    padding: '10px 20px'
+                    padding: isMobile ? '8px 12px' : '10px 20px'
                 }}>
-                    <Card style={{ background: token.colorWarningBg, border: `1px solid ${token.colorWarning}` }}>
+                    <Card style={{
+                        background: token.colorWarningBg,
+                        border: `1px solid ${token.colorWarning}`,
+                        fontSize: isMobile ? '12px' : '14px'
+                    }}>
                         <Text type="warning">连接已断开，正在尝试重新连接...</Text>
                     </Card>
                 </div>
@@ -285,6 +352,9 @@ const GamePage: React.FC = () => {
                 messages={wsMessages}
                 onClose={handleDrawerClose}
                 onToggle={toggleMessageWindow}
+                onSendMessage={(message) => {
+                    sendChat(message);
+                }}
             />
         </>
     );

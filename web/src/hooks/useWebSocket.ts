@@ -26,6 +26,15 @@ export interface UseWebSocketReturn {
         ai_dm_personality?: string;
         duration_mins?: number;
     }) => void;
+    nextStage: () => void;
+    sendVote: (votedUserId: number) => void;
+    startVote: () => void;
+    endVote: () => void;
+    searchBegin: () => void;
+    searchEnd: () => void;
+    searchScriptClueData: (settings: {
+        clue_id?: number;
+    }) => void;
 }
 
 export interface MessageContent {
@@ -140,7 +149,7 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
 
         const messageEventNames = [
             // 连接相关
-            'connected', 'disconnected', 'error',
+            'disconnected', 'error',
             // 房间状态相关
             'room_settings_updated', 'player_joined',
             'player_left', 'room_dissolved',
@@ -151,11 +160,11 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
             // 准备状态相关
             'player_ready', 'all_ready',
             // 游戏流程相关
-            'game_started', 'game_ended', 'stage_changed',
+            'game_ended', 'stage_changed',
             // 玩家行动相关
             'player_action', 'action_result',
             // 投票相关
-            'vote_started', 'vote_updated', 'vote_ended',
+            'game_vote', 'start_vote', 'end_vote', 'vote_started', 'vote_updated', 'vote_ended',
             // 线索相关
             'clue_discovered', 'clue_shared',
             // AI DM相关
@@ -163,7 +172,9 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
             // 游戏状态相关
             'game_status',
             // 剧本生成相关
-            'script_generation_started', 'script_generation_completed', 'script_generation_failed'
+            'script_generation_started', 'script_generation_completed', 'script_generation_failed',
+            // 下一幕相关
+            'next_stage', 'stage_updated'
         ];
         const eventHandlers: { [key: string]: (data: any) => void } = {};
         messageEventNames.forEach(eventName => {
@@ -177,7 +188,6 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
             ws.off('connected', handleConnected);
             ws.off('disconnected', handleDisconnected);
             ws.off('room_status', handleRoomStatus);
-
             messageEventNames.forEach(eventName => {
                 if (eventHandlers[eventName]) {
                     ws.off(eventName, eventHandlers[eventName]);
@@ -235,6 +245,36 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         wsRef.current?.generateScript();
     };
 
+    const nextStage = (): void => {
+        wsRef.current?.nextStage();
+    };
+
+    const sendVote = (votedUserId: number): void => {
+        wsRef.current?.sendVote(votedUserId);
+    };
+
+    const startVote = (): void => {
+        wsRef.current?.startVote();
+    };
+
+    const endVote = (): void => {
+        wsRef.current?.endVote();
+    };
+
+    const searchBegin = (): void => {
+        wsRef.current?.searchBegin();
+    };
+
+    const searchEnd = (): void => {
+        wsRef.current?.searchEnd();
+    };
+
+    const searchScriptClueData = (settings: {
+        clue_id?: number;
+    }): void => {
+        wsRef.current?.searchScriptClueData(settings);
+    };
+
     return {
         ws: wsRef.current,
         isConnected,
@@ -250,6 +290,13 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         sendPlayerAction,
         updateRoomSettings,
         generateScript,
+        nextStage,
+        sendVote,
+        startVote,
+        endVote,
+        searchBegin,
+        searchEnd,
+        searchScriptClueData,
     };
 };
 
