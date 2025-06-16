@@ -12,10 +12,8 @@ from model.entity.Scripts import (
     Scripts, ScriptStages, ScriptCharacters, 
     CharacterStageGoals, ScriptClues, Users, GameRooms, ScriptTimeline
 )
-from model.dto.response import ApiResponse
-from model.dto.ScriptsDto import CreateScriptRequest, GenerateScriptResponse
 from conf.config import settings
-from .auth_api import get_current_user
+from api.auth_api import get_current_user
 
 router = APIRouter(prefix="/api/scripts", tags=["剧本管理"])
 
@@ -364,119 +362,119 @@ async def parse_and_save_script(ai_response: str, author_id: int, play_count:int
     except IntegrityError as e:
         raise HTTPException(status_code=500, detail=f"数据库保存失败: {str(e)}")
 
-@router.post("/generate", response_model=ApiResponse)
-async def generate_script(request: CreateScriptRequest, current_user: Annotated[Users, Depends(get_current_user)]):
-    """生成剧本"""
-    try:
-        # 验证房间存在且用户为房主
-        room = await GameRooms.get(room_code=request.room_code)
-        if room.host_user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="只有房主可以生成剧本")
+# @router.post("/generate", response_model=ApiResponse)
+# async def generate_script(request: CreateScriptRequest, current_user: Annotated[Users, Depends(get_current_user)]):
+#     """生成剧本"""
+#     try:
+#         # 验证房间存在且用户为房主
+#         room = await GameRooms.get(room_code=request.room_code)
+#         if room.host_user_id != current_user.id:
+#             raise HTTPException(status_code=403, detail="只有房主可以生成剧本")
         
-        # 通知WebSocket（如果房间有连接的用户）
-        try:
-            from websocket.connection_manager import manager
-            from model.ws.notification_types import MessageType, create_message, create_formatted_data
+#         # 通知WebSocket（如果房间有连接的用户）
+#         try:
+#             from websocket.connection_manager import manager
+#             from model.ws.notification_types import MessageType, create_message, create_formatted_data
             
-            # 获取用户昵称
-            user = await Users.get(id=current_user.id)
+#             # 获取用户昵称
+#             user = await Users.get(id=current_user.id)
             
-            # 通知剧本生成开始
-            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED,
-                create_formatted_data(
-                    message=f"{user.nickname} 开始生成剧本...",
-                    send_id=None,
-                    send_nickname="系统"
-                )
-            ))
-        except Exception as ws_error:
-            # WebSocket通知失败不影响主流程
-            print(f"WebSocket通知失败: {str(ws_error)}")
+#             # 通知剧本生成开始
+#             await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_STARTED,
+#                 create_formatted_data(
+#                     message=f"{user.nickname} 开始生成剧本...",
+#                     send_id=None,
+#                     send_nickname="系统"
+#                 )
+#             ))
+#         except Exception as ws_error:
+#             # WebSocket通知失败不影响主流程
+#             print(f"WebSocket通知失败: {str(ws_error)}")
         
-        # 创建用户提示词
-        user_prompt = create_user_prompt(
-            request.theme,
-            room.max_players,
-            request.difficulty,
-            request.ai_dm_personality,
-            request.duration_mins
-        )
+#         # 创建用户提示词
+#         user_prompt = create_user_prompt(
+#             request.theme,
+#             room.max_players,
+#             request.difficulty,
+#             request.ai_dm_personality,
+#             request.duration_mins
+#         )
         
-        # 调用 AI 接口
-        ai_response = await call_ai_api(user_prompt)
-        print(f"AI Response: {ai_response}")
-        # 解析并保存到数据库
-        script_id = await parse_and_save_script(ai_response, current_user.id, room.max_players, request.duration_mins)
+#         # 调用 AI 接口
+#         ai_response = await call_ai_api(user_prompt)
+#         print(f"AI Response: {ai_response}")
+#         # 解析并保存到数据库
+#         script_id = await parse_and_save_script(ai_response, current_user.id, room.max_players, request.duration_mins)
         
-        # 将剧本关联到房间
-        room = await GameRooms.get(room_code=request.room_code)
-        room.script_id = script_id
-        await room.save()
+#         # 将剧本关联到房间
+#         room = await GameRooms.get(room_code=request.room_code)
+#         room.script_id = script_id
+#         await room.save()
         
-        # 获取生成的剧本信息和角色信息
-        script = await Scripts.get(id=script_id).prefetch_related('characters')
+#         # 获取生成的剧本信息和角色信息
+#         script = await Scripts.get(id=script_id).prefetch_related('characters')
         
-        # 构建角色信息列表
-        characters = []
-        for character in script.characters:
-            characters.append({
-                "id": character.id,
-                "name": character.name,
-                "gender": character.gender,
-                "public_info": character.public_info
-            })
+#         # 构建角色信息列表
+#         characters = []
+#         for character in script.characters:
+#             characters.append({
+#                 "id": character.id,
+#                 "name": character.name,
+#                 "gender": character.gender,
+#                 "public_info": character.public_info
+#             })
         
-        # 通知WebSocket剧本生成完成
-        try:
-            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED,
-                create_formatted_data(
-                    message=f"剧本生成完成：{script.title}",
-                    send_id=None,
-                    send_nickname="系统"
-                )
-            ))
+#         # 通知WebSocket剧本生成完成
+#         try:
+#             await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_COMPLETED,
+#                 create_formatted_data(
+#                     message=f"剧本生成完成：{script.title}",
+#                     send_id=None,
+#                     send_nickname="系统"
+#                 )
+#             ))
             
-            # 广播房间状态更新
-            from websocket.websocket_routes import broadcast_room_status
-            await broadcast_room_status(request.room_code)
-        except Exception as ws_error:
-            print(f"WebSocket通知失败: {str(ws_error)}")
+#             # 广播房间状态更新
+#             from websocket.websocket_routes import broadcast_room_status
+#             await broadcast_room_status(request.room_code)
+#         except Exception as ws_error:
+#             print(f"WebSocket通知失败: {str(ws_error)}")
         
-        return ApiResponse(
-            code=200,
-            msg="剧本生成成功",
-            data={
-                "script_id": script.id,
-                "characters": characters
-            }
-        )
+#         return ApiResponse(
+#             code=200,
+#             msg="剧本生成成功",
+#             data={
+#                 "script_id": script.id,
+#                 "characters": characters
+#             }
+#         )
         
-    except HTTPException:
-        # 通知WebSocket剧本生成失败
-        try:
-            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
-                create_formatted_data(
-                    message="剧本生成失败",
-                    send_id=None,
-                    send_nickname="系统"
-                )
-            ))
-        except:
-            pass
-        raise   
-    except Exception as e:
-        # 通知WebSocket剧本生成失败
-        try:
-            await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
-                create_formatted_data(
-                    message=str(e),
-                    send_id=None,
-                    send_nickname="系统"
-                )
-            ))
-        except:
-            pass
-        raise HTTPException(status_code=500, detail=f"生成剧本失败: {str(e)}")
+#     except HTTPException:
+#         # 通知WebSocket剧本生成失败
+#         try:
+#             await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
+#                 create_formatted_data(
+#                     message="剧本生成失败",
+#                     send_id=None,
+#                     send_nickname="系统"
+#                 )
+#             ))
+#         except:
+#             pass
+#         raise   
+#     except Exception as e:
+#         # 通知WebSocket剧本生成失败
+#         try:
+#             await manager.broadcast_to_room(request.room_code, create_message(MessageType.SCRIPT_GENERATION_FAILED,
+#                 create_formatted_data(
+#                     message=str(e),
+#                     send_id=None,
+#                     send_nickname="系统"
+#                 )
+#             ))
+#         except:
+#             pass
+#         raise HTTPException(status_code=500, detail=f"生成剧本失败: {str(e)}")
 
 
 

@@ -136,6 +136,10 @@ class GamePlayers(BaseModel):
     character = fields.ForeignKeyField('models.ScriptCharacters', related_name='game_players', null=True)
     is_ready = fields.BooleanField(default=False)
     is_alive = fields.BooleanField(default=True)
+    is_npc = fields.BooleanField(default=False)  # 是否为NPC
+    
+    # 
+    
     notes = fields.TextField(default="")
 
     class Meta:

@@ -69,10 +69,11 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
                 
                 # 验证消息格式
                 message_type = message.get("type")
-                print(f"接收到消息: {message_type} - {message}")
                 if message_type == "ping":
                     continue
                 message_data = message.get("data", {})
+                
+                print(f"接收到消息: {message_type} - {message_data}")
                 
                 is_valid, error_msg = validate_incoming_message(message_type, message_data)
                 if not is_valid:

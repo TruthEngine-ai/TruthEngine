@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from conf.database import register_db
 from api.room_api import router as room_router
 from api.auth_api import router as auth_router
-from api.scripts_api import router as scripts_router
+from utils.scripts_util import router as scripts_router
 from websocket.websocket_routes import router as websocket_router
 from fastapi.middleware.cors import CORSMiddleware
 
