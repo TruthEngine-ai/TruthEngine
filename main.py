@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from conf.database import register_db
 from api.room_api import router as room_router
 from api.auth_api import router as auth_router
+from api.npc_api import router as npc_router
 from utils.scripts_util import router as scripts_router
 from websocket.websocket_routes import router as websocket_router
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,7 @@ register_db(app)
 app.include_router(auth_router)
 app.include_router(room_router)
 app.include_router(scripts_router)
+app.include_router(npc_router)
 # 添加WebSocket路由
 app.include_router(websocket_router)
 

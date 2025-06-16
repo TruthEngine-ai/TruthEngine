@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from tortoise.exceptions import DoesNotExist
 
 from model.entity.Scripts import AIConfig
-from utils.auth_util import get_current_user
+from .auth_api import get_current_user
 from model.entity.Scripts import Users
 
 router = APIRouter(prefix="/npc", tags=["NPC管理"])
