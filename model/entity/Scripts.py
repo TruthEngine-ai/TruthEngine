@@ -137,8 +137,8 @@ class GamePlayers(BaseModel):
     is_ready = fields.BooleanField(default=False)
     is_alive = fields.BooleanField(default=True)
     is_npc = fields.BooleanField(default=False)  # 是否为NPC
+    aiconfig = fields.ForeignKeyField('models.AIConfig', related_name='game_players', null=True)  # AI NPC配置
     
-    # 
     
     notes = fields.TextField(default="")
 
@@ -201,3 +201,45 @@ class ScriptTimeline(BaseModel):
     is_public = fields.BooleanField(default=False)  # 是否公开事件
     class Meta:
         table = "script_timeline"
+        
+        
+        
+# 新增AI NPC配置表
+class AIConfig(BaseModel):
+    """AI NPC配置表"""
+    name = fields.CharField(max_length=50)  # 配置名称
+    personality_type = fields.CharField(
+        max_length=20,
+        choices=[('积极', '积极'), ('谨慎', '谨慎'), ('神秘', '神秘'), ('直接', '直接')]
+    )
+    strategy_type = fields.CharField(
+        max_length=20, 
+        choices=[('保守', '保守'), ('激进', '激进'), ('平衡', '平衡')]
+    )
+    base_prompt = fields.TextField()  # 基础提示词模板
+    response_templates = fields.JSONField()  # 回应模板
+    behavior_rules = fields.JSONField()  # 行为规则
+    response_random = fields.FloatField(default=0.5)  # 响应随机性，范围0-1
+    response_interval =  fields.IntField(default=90)  # 响应间隔时间（秒）
+    is_enabled = fields.BooleanField(default=True)  # 是否启用该配置
+    
+    class Meta:
+        table = "ai_config"
+
+# 新增AI交互记录表
+class AIInteractions(BaseModel):
+    """AI交互记录表"""
+    room = fields.ForeignKeyField('models.GameRooms', related_name='ai_interactions')
+    ai_player = fields.ForeignKeyField('models.GamePlayers', related_name='ai_interactions_as_ai')
+    trigger_player = fields.ForeignKeyField('models.GamePlayers', related_name='ai_interactions_as_trigger', null=True)
+    interaction_type = fields.CharField(
+        max_length=20,
+        choices=[('主动聊天', '主动聊天'), ('回应聊天', '回应聊天'), ('主动私聊', '主动私聊'), 
+                ('回应私聊', '回应私聊'), ('搜证', '搜证'), ('公开线索', '公开线索'), ('投票', '投票')]
+    )
+    context_data = fields.JSONField()  # 上下文数据
+    ai_response = fields.JSONField()   # AI响应结果
+    execution_result = fields.TextField(null=True)  # 执行结果
+    
+    class Meta:
+        table = "ai_interactions"

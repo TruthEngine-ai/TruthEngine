@@ -70,6 +70,12 @@ class MessageType(str, Enum):
     GAME_PHASE_CHANGED = "game_phase_changed"  # 游戏阶段变更
     NEXT_STAGE = "next_stage"  # 进入下一阶段
     
+    # NPC相关
+    ADD_NPC = "add_npc"
+    NPC_ADDED = "npc_added"
+    REMOVE_NPC = "remove_npc"
+    NPC_REMOVED = "npc_removed"
+    
     # 剧本生成相关
     GENERATE_SCRIPT = "generate_script"
     SCRIPT_GENERATION_STARTED = "script_generation_started"
@@ -136,6 +142,14 @@ class SearchScriptClueData(BaseModel):
     """搜查线索数据"""
     clue_id: int = Field(..., gt=0)
 
+class AddNPCData(BaseModel):
+    """添加NPC数据"""
+    aiconfig_id: int = Field(..., gt=0)
+
+class RemoveNPCData(BaseModel):
+    """移除NPC数据"""
+    player_id: int = Field(..., gt=0)  # NPC的GamePlayer记录ID
+
 # 接收消息类型映射
 INCOMING_MESSAGE_TYPES = {
     MessageType.CHAT: ChatMessageData,
@@ -152,6 +166,8 @@ INCOMING_MESSAGE_TYPES = {
     MessageType.SEARCH_BEGIN: None,  # 搜证开始不需要额外数据，使用空数据模型
     MessageType.SEARCH_END: None,  # 搜证结束不需要额外数据，使用空数据模型
     MessageType.SEARCH_SCRIPT_CLUE: SearchScriptClueData,  # 搜查线索需要线索ID
+    MessageType.ADD_NPC: AddNPCData,
+    MessageType.REMOVE_NPC: RemoveNPCData,
     MessageType.NEXT_STAGE: None,
 }
 
@@ -179,6 +195,8 @@ OUTGOING_MESSAGE_TYPES = {
     MessageType.SCRIPT_GENERATION_STARTED: dict,
     MessageType.SCRIPT_GENERATION_COMPLETED: dict,
     MessageType.SCRIPT_GENERATION_FAILED: dict,
+    MessageType.NPC_ADDED: dict,
+    MessageType.NPC_REMOVED: dict,
     MessageType.START_VOTE: dict,
     MessageType.END_VOTE: dict,
 }
@@ -265,12 +283,8 @@ def parse_incoming_message(message_type: str, data: Dict[str, Any]) -> Any:
             else:
                 # 对于普通dict类型，直接返回数据
                 return {}
-        elif message_type == MessageType.NEXT_STAGE.value:
-            return NextStageData()
-        elif message_type == MessageType.REQUEST_GAME_STATUS.value:
-            return RequestGameStatusData()
-        
-        return None
+        else:    
+            return None
     except Exception as e:
         print(f"解析消息数据失败: {str(e)}")
         return None

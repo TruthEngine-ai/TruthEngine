@@ -10,6 +10,8 @@ from model.ws.notification_types import (
 )
 from utils.game_log_util import game_log_util
 
+from service.AIHandler import ai_handler
+
 # 导入各个处理器
 from .game_handler.ChatHandler import chat_handler
 from .game_handler.CharacterHandler import character_handler
@@ -21,6 +23,7 @@ from .game_handler.VoteHandler import vote_handler
 from .game_handler.RoomSettingsHandler import room_settings_handler
 from .game_handler.ScriptGeneratorHandler import script_generator_handler
 from .game_handler.ClueSearchHandler import clue_search_handler
+from .game_handler.NPCHandler import npc_handler
 
 class GameHandler:
     async def handle_message(self, websocket, room_code: str, user_id: int, message: Dict[str, Any]):
@@ -48,7 +51,9 @@ class GameHandler:
                 MessageType.NEXT_STAGE.value,
                 MessageType.SEARCH_BEGIN.value,
                 MessageType.SEARCH_END.value,
-                MessageType.SEARCH_SCRIPT_CLUE.value
+                MessageType.SEARCH_SCRIPT_CLUE.value,
+                MessageType.ADD_NPC.value,
+                MessageType.REMOVE_NPC.value
             ]:
                 # 系统消息类型
                 await game_log_util.create_system_log(
@@ -102,11 +107,16 @@ class GameHandler:
             MessageType.SEARCH_BEGIN.value: search_handler.handle_search_begin,
             MessageType.SEARCH_END.value: search_handler.handle_search_end,
             MessageType.SEARCH_SCRIPT_CLUE.value: clue_search_handler.handle_search_script_clue,
+            MessageType.ADD_NPC.value: npc_handler.handle_add_npc,
+            MessageType.REMOVE_NPC.value: npc_handler.handle_remove_npc,
         }
         
         handler = handlers.get(message_type)
         if handler:
             await handler(room_code, user_id, message.get("data", {}))
+            # 处理完消息后，触发AI响应
+            if message_type in [MessageType.CHAT.value, MessageType.PRIVATE_MESSAGE.value]:
+                await ai_handler.handle_player_message(room_code, user_id, message)
         else:
             await manager.send_personal_message(
                 create_error_message(f"未知消息类型: {message_type}"), 
@@ -115,4 +125,3 @@ class GameHandler:
 
 # 全局游戏处理器实例
 game_handler = GameHandler()
-  
