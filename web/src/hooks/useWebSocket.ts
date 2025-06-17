@@ -35,6 +35,8 @@ export interface UseWebSocketReturn {
     searchScriptClueData: (settings: {
         clue_id?: number;
     }) => void;
+    addNPC: (aiconfigId: number) => void;
+    removeNPC: (playerId: number) => void;
 }
 
 export interface MessageContent {
@@ -174,7 +176,9 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
             // 剧本生成相关
             'script_generation_started', 'script_generation_completed', 'script_generation_failed',
             // 下一幕相关
-            'next_stage', 'stage_updated'
+            'next_stage', 'stage_updated',
+            // NPC相关
+            'npc_added', 'npc_removed', 'npc_action', 'npc_message'
         ];
         const eventHandlers: { [key: string]: (data: any) => void } = {};
         messageEventNames.forEach(eventName => {
@@ -275,6 +279,14 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         wsRef.current?.searchScriptClueData(settings);
     };
 
+    const addNPC = (aiconfigId: number): void => {
+        wsRef.current?.addNPC(aiconfigId);
+    };
+
+    const removeNPC = (playerId: number): void => {
+        wsRef.current?.removeNPC(playerId);
+    };
+
     return {
         ws: wsRef.current,
         isConnected,
@@ -297,6 +309,8 @@ export const useWebSocket = (roomCode: string): UseWebSocketReturn => {
         searchBegin,
         searchEnd,
         searchScriptClueData,
+        addNPC,
+        removeNPC,
     };
 };
 

@@ -67,7 +67,8 @@ export const convertPlayersToSlots = (players: Player[]): PlayerSlot[] => {
         is_empty: false,
         character_name: player.character_name,
         is_ready: player.is_ready,
-        is_online: player.is_online
+        is_online: player.is_online,
+        is_ai: player.user_id < 0 // 假设AI玩家的user_id为负数
     }));
 };
 

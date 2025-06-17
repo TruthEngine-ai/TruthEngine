@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Typography, Avatar, Tag, theme } from 'antd';
-import { TeamOutlined, UserOutlined, CrownOutlined } from '@ant-design/icons';
+import { Card, Typography, Avatar, Tag, theme, Button, Popconfirm } from 'antd';
+import { TeamOutlined, UserOutlined, CrownOutlined, RobotOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { PlayerSlot } from './types';
 
 const { Text } = Typography;
@@ -8,9 +8,18 @@ const { Text } = Typography;
 interface PlayersListCardProps {
     allSlots: PlayerSlot[];
     maxPlayers?: number;
+    isHost?: boolean;
+    onAddAiPlayer?: () => void;
+    onRemoveNPC?: (playerId: number) => void;
 }
 
-const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers = 6 }) => {
+const PlayersListCard: React.FC<PlayersListCardProps> = ({ 
+    allSlots, 
+    maxPlayers = 6, 
+    isHost = false,
+    onAddAiPlayer,
+    onRemoveNPC 
+}) => {
     const { token } = theme.useToken();
 
     // 根据最大玩家数量决定列数
@@ -20,13 +29,35 @@ const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers 
         return 3; // 8人或更多时使用3列
     };
 
+    const hasEmptySlots = allSlots.some(slot => slot.is_empty);
+
+    // 处理移除AI玩家
+    const handleRemoveNPC = (playerId: number) => {
+        if (onRemoveNPC) {
+            onRemoveNPC(playerId);
+        }
+    };
+
     return (
         <Card
             title={
-                <span style={{ fontSize: '18px', fontWeight: 600 }}>
-                    <TeamOutlined style={{ marginRight: 8, color: token.colorPrimary }} />
-                    玩家列表 ({allSlots.filter(slot => !slot.is_empty).length}/{maxPlayers})
-                </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 600 }}>
+                        <TeamOutlined style={{ marginRight: 8, color: token.colorPrimary }} />
+                        玩家列表 ({allSlots.filter(slot => !slot.is_empty).length}/{maxPlayers})
+                    </span>
+                    {isHost && hasEmptySlots && (
+                        <Button
+                            type="primary"
+                            size="small"
+                            icon={<RobotOutlined />}
+                            onClick={onAddAiPlayer}
+                            style={{ fontSize: '12px' }}
+                        >
+                            添加AI玩家
+                        </Button>
+                    )}
+                </div>
             }
             style={{
                 height: 'fit-content',
@@ -58,6 +89,7 @@ const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers 
                             justifyContent: 'center',
                             alignItems: 'center',
                             transition: 'all 0.3s ease',
+                            position: 'relative',
                         }}
                     >
                         {slot.is_empty ? (
@@ -77,14 +109,38 @@ const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers 
                             </>
                         ) : (
                             <>
+                                {/* 移除按钮 - 只有房主可以移除AI玩家 */}
+                                {isHost && slot.is_ai && onRemoveNPC && (
+                                    <Popconfirm
+                                        title="确认移除AI玩家？"
+                                        onConfirm={() => handleRemoveNPC(parseInt(slot.id))}
+                                        okText="确认"
+                                        cancelText="取消"
+                                    >
+                                        <Button
+                                            type="text"
+                                            size="small"
+                                            icon={<DeleteOutlined />}
+                                            style={{
+                                                position: 'absolute',
+                                                top: '4px',
+                                                right: '4px',
+                                                color: token.colorTextTertiary,
+                                                fontSize: '12px',
+                                            }}
+                                        />
+                                    </Popconfirm>
+                                )}
+                                
                                 <Avatar
                                     size={48}
-                                    src={slot.avatar}
-                                    icon={<UserOutlined />}
+                                    {...(slot.avatar ? { src: slot.avatar } : {})}
+                                    icon={slot.is_ai ? <RobotOutlined /> : <UserOutlined />}
                                     style={{
                                         marginBottom: '12px',
                                         border: `2px solid ${slot.is_online ? token.colorPrimary : token.colorTextQuaternary}`,
-                                        opacity: slot.is_online ? 1 : 0.5
+                                        opacity: slot.is_online ? 1 : 0.5,
+                                        backgroundColor: slot.is_ai ? '#1890ff' : undefined
                                     }}
                                 />
                                 <Text
@@ -104,6 +160,15 @@ const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers 
                                             }}
                                         />
                                     )}
+                                    {slot.is_ai && (
+                                        <RobotOutlined
+                                            style={{
+                                                marginLeft: 4,
+                                                color: '#1890ff',
+                                                fontSize: '12px'
+                                            }}
+                                        />
+                                    )}
                                 </Text>
                                 {slot.character_name && (
                                     <Text
@@ -120,6 +185,8 @@ const PlayersListCard: React.FC<PlayersListCardProps> = ({ allSlots, maxPlayers 
                                 <div style={{ marginTop: '6px' }}>
                                     {!slot.is_online ? (
                                         <Tag color="red">离线</Tag>
+                                    ) : slot.is_ai ? (
+                                        <Tag color="blue">AI</Tag>
                                     ) : (
                                         <Tag color={slot.is_ready ? 'green' : 'orange'}>
                                             {slot.is_ready ? '已准备' : '未准备'}

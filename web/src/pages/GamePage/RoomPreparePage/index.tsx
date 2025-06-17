@@ -6,6 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import RoomInfoCard from './RoomInfoCard';
 import GameSettingsCard from './GameSettingsCard';
 import PlayersListCard from './PlayersListCard';
+import AddAiPlayerModal from './AddAiPlayerModal';
 import {
     getInitialFormValues,
     buildSettingsUpdate,
@@ -23,11 +24,14 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
     roomStatus = null,
     setReady = () => { },
     updateRoomSettings = () => { },
-    generateScript = () => { }
+    generateScript = () => { },
+    addNPC = () => { },
+    removeNPC = () => { }
 }) => {
     const { token } = theme.useToken();
     const [form] = Form.useForm();
     const [generating, setGenerating] = useState(false);
+    const [showAiPlayerModal, setShowAiPlayerModal] = useState(false);
     const { user, refreshUserInfo } = useAuth();
 
     const handleLeaveRoom = async () => {
@@ -96,6 +100,19 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
         });
     };
 
+    // 处理添加AI玩家
+    const handleAddNPC = (aiconfigId: number) => {
+        console.log('添加AI玩家，配置ID:', aiconfigId);
+        addNPC(aiconfigId);
+        setShowAiPlayerModal(false);
+    };
+
+    // 处理移除AI玩家
+    const handleRemoveNPC = (playerId: number) => {
+        console.log('移除AI玩家，玩家ID:', playerId);
+        removeNPC(playerId);
+    };
+
     useEffect(() => {
         if (roomStatus) {
             console.log('房间状态已更新，重新渲染UI:', {
@@ -153,6 +170,11 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
     return (
         <>
             <ScriptGeneratingMask visible={generating} />
+            <AddAiPlayerModal
+                visible={showAiPlayerModal}
+                onCancel={() => setShowAiPlayerModal(false)}
+                onAddNPC={handleAddNPC}
+            />
             <div
                 style={{
                     display: 'flex',
@@ -196,6 +218,9 @@ const RoomPreparePage: React.FC<RoomPreparePageProps> = ({
                             <PlayersListCard
                                 allSlots={allSlots}
                                 maxPlayers={room.max_players}
+                                isHost={!!isHost}
+                                onAddAiPlayer={() => setShowAiPlayerModal(true)}
+                                onRemoveNPC={handleRemoveNPC}
                             />
                         </Col>
                     </Row>

@@ -173,10 +173,13 @@ export interface RoomStatus {
         character_id?: number;
         is_ready: boolean;
         is_host: boolean;
+        is_npc: boolean;
         is_online: boolean;
         is_alive?: boolean;
     }>;
     characters?: Array<{
+        id: number;
+        name: string;
         player_nickname: string;
         character_name: string;
         character_id: number;
@@ -186,6 +189,7 @@ export interface RoomStatus {
         is_self: boolean;
         backstory?: string;
         is_murderer?: boolean;
+        selected_by?: number;
     }>;
     story_timeline?: StoryTimeline;
     current_stage?: CurrentStage;
@@ -380,6 +384,16 @@ export class GameWebSocket {
     }): void {
         this.send('search_script_clue', settings);
     }
+    // 添加NPC
+    addNPC(aiconfigId: number): void {
+        this.send('add_npc', { aiconfig_id: aiconfigId });
+    }
+
+    // 移除NPC
+    removeNPC(playerId: number): void {
+        this.send('remove_npc', { player_id: playerId });
+    }
+
     // 添加事件监听器
     on(event: string, listener: EventListener): void {
         if (!this.listeners.has(event)) {

@@ -21,7 +21,7 @@ const GamePage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const roomCode = searchParams.get('room_code');
     const [isMessageWindowVisible, setMessageWindowVisible] = useState(false);
-    const { messages: wsMessages, isConnected, roomStatus, connect, setReady, updateRoomSettings, generateScript, selectCharacter, startGame, nextStage, sendVote, sendChat, searchBegin, searchEnd, searchScriptClueData } = useWebSocket(roomCode || 'UNKNOWN_ROOM_FOR_GAMEPAGE');
+    const { messages: wsMessages, isConnected, roomStatus, connect, setReady, updateRoomSettings, generateScript, selectCharacter, startGame, nextStage, sendVote, sendChat, searchBegin, searchEnd, searchScriptClueData,addNPC,removeNPC } = useWebSocket(roomCode || 'UNKNOWN_ROOM_FOR_GAMEPAGE');
 
     // 房间状态检查相关状态
     const [checkingUserStatus, setCheckingUserStatus] = useState(true);
@@ -250,6 +250,8 @@ const GamePage: React.FC = () => {
         switch (roomStatus.room.status) {
             case '等待中':
                 return <RoomPreparePage
+                    addNPC={addNPC}
+                    removeNPC={removeNPC}
                     roomCode={roomCode}
                     isConnected={isConnected}
                     roomStatus={roomStatus}
@@ -314,6 +316,8 @@ const GamePage: React.FC = () => {
                 />
             default:
                 return <RoomPreparePage
+                           addNPC={addNPC}
+                    removeNPC={removeNPC}
                     roomCode={roomCode}
                     isConnected={isConnected}
                     roomStatus={roomStatus}

@@ -19,6 +19,7 @@ export interface PlayerSlot {
     character_name?: string;
     is_ready: boolean;
     is_online: boolean;
+    is_ai?: boolean; // 新增：标识是否为AI玩家
 }
 
 export interface GameSettings {
@@ -53,4 +54,6 @@ export interface RoomPreparePageProps {
         ai_dm_personality?: string;
         duration_mins?: number;
     }) => void;
+    addNPC: (aiconfigId: number) => void;
+    removeNPC: (playerId: number) => void;
 }
